@@ -5,32 +5,23 @@ import requests
 import threading
 import time
 import logging
+import json
 from flask import Flask, render_template, request, jsonify
 from requests.exceptions import Timeout
+
+# Load settings from settings.ini
 
 def load_config(script_dir: str) -> None:
     """
     Loads user settings from settings.ini into globals
-
-    Args:
-        script_dir (str): The working directory of this script.
-
-    Returns:
-        None
     """
-
-    # if script path doesn't have trailing slash
     if script_dir[-1] != '/':
-        script_dir = script_dir + "/"  # add it
+        script_dir = script_dir + "/"
 
-    # get current working directory of this script to find settings.ini
     config_path = f"{script_dir}settings.ini"
-
-    # parse settings.ini
     parser = configparser.ConfigParser()
     parser.read(config_path)
 
-    # globals for settings
     global BINDING_ADDRESS
     global BINDING_PORT
     global NPU_ADDRESS
@@ -41,20 +32,15 @@ def load_config(script_dir: str) -> None:
     global IGNORE_CHINESE
     global UI_THEME
 
-    # assign settings. str unless noted otherwise
     BINDING_ADDRESS = parser.get('chat_ui', 'BINDING_ADDRESS')
     BINDING_PORT = int(parser.get('chat_ui', 'BINDING_PORT'))
     NPU_ADDRESS = parser.get('npu', 'NPU_ADDRESS')
     NPU_PORT = parser.get('npu', 'NPU_PORT')
-    CONNECTION_TIMEOUT = int(
-        parser.get('timeout', 'TIMEOUT')
-    )  # int
+    CONNECTION_TIMEOUT = int(parser.get('timeout', 'TIMEOUT'))
 
-    USE_CHAT_CONTEXT = parser.get('context', 'USE_CONTEXT')  # bool
-    CONTEXT_DEPTH = int(
-        parser.get('context', 'DEPTH')
-    )  # int
-    IGNORE_CHINESE = parser.get('context', 'IGNORE_CHINESE')  # bool
+    USE_CHAT_CONTEXT = parser.get('context', 'USE_CONTEXT')
+    CONTEXT_DEPTH = int(parser.get('context', 'DEPTH'))
+    IGNORE_CHINESE = parser.get('context', 'IGNORE_CHINESE')
 
     UI_THEME = parser.get('theme', 'THEME')
 
@@ -62,22 +48,29 @@ def load_config(script_dir: str) -> None:
 script_dir = os.path.dirname(os.path.abspath(__file__))
 load_config(script_dir)
 
-# context / chat history
-context = []
-CONTEXTS = {}  # Dictionary to store multiple chat contexts with full metadata
+# Contexts store multiple chat sessions; keys are chat ids and values are Chat objects
+CONTEXTS = {}
+# Current in-memory context for the active request
+CONTEXT = []
+# Keep legacy alias (some earlier code uses 'context')
+context = CONTEXT
 
-chat_id_counter = 0  # Global counter for unique chat IDs
+# A lock to guard concurrent requests — define at module level so routes can use it
+lock = threading.Lock()
+
+chat_id_counter = 0  # simple global counter
 
 class Chat:
     """Represents a chat session with metadata and messages"""
-    def __init__(self, chat_id, name):
+    def __init__(self, chat_id, name, needs_naming=False):
         self.id = chat_id
         self.name = name
-        self.messages = []  # List of message strings (for context window)
-        self.created_at = int(time.time() * 1000)  # timestamp in milliseconds
+        self.messages = []
+        self.created_at = int(time.time() * 1000)
+        # Flag indicating whether the server should ask the LLM to suggest a nicer name/emoji
+        self.needs_naming = needs_naming
 
     def to_dict(self):
-        """Convert chat to dictionary representation"""
         return {
             'id': self.id,
             'name': self.name,
@@ -86,59 +79,33 @@ class Chat:
         }
 
     def add_message(self, message):
-        """Add a message to the chat"""
         self.messages.append(message)
-
-        # Trim context to desired depth by removing oldest element
+        # Trim to context depth
         if len(self.messages) > CONTEXT_DEPTH:
             self.messages.pop(0)
+
 
 APPNAME = 'NPU Chat'
 VERSION = '0.27'
 
 
 def contains_chinese(text: str) -> bool:
-    """
-    Detect if a string contains Chinese characters.
-
-    Args:
-        text (str): The input string to check.
-
-    Returns:
-        bool: True if the string contains Chinese characters, False otherwise.
-    """
     pattern = r'[一-鿿]+'
-    if re.search(pattern, text):
-        return True
-    else:
-        return False
+    return bool(re.search(pattern, text))
+
 
 def feed_the_llama(query: str) -> str:
-    """
-    Send the user's query to the NPU server and modify it if context is being
-    used.
-
-    Args:
-        query (str): The user's input string.
-
-    Returns:
-        str: Answer from the LLM.
-    """
+    """Send the user's query to the NPU server and return the text content."""
+    # If context usage is enabled, prepend the recent context
+    global CONTEXT
 
     if USE_CHAT_CONTEXT:
-        if CONTEXT:  # if context history isn't empty
-            # compile the history into individual codeblocks
+        if CONTEXT:
             llm_output_history = ""
-            for llm_reply in CONTEXT:  # format into markdown codeblocks
-                llm_output_history = (
-                    f"{llm_output_history}"
-                    f"```\n"
-                    f"{llm_reply}"
-                    f"\n```\n"
-                )
-            query = llm_output_history + query  # append user's query
+            for llm_reply in CONTEXT:
+                llm_output_history = f"{llm_output_history}```\n{llm_reply}\n```\n"
+            query = llm_output_history + query
 
-    # prompt template:
     prefix = (
         "<|im_start|>system You are a helpful assistant. <|im_end|> "
         "<|im_start|>user "
@@ -148,7 +115,6 @@ def feed_the_llama(query: str) -> str:
         "<|im_end|><|im_start|>assistant "
     )
 
-    # create the request object
     json_data = {
         'PROMPT_TEXT_PREFIX': prefix,
         'input_str': str(query) + ' ',
@@ -167,51 +133,35 @@ def feed_the_llama(query: str) -> str:
             timeout=CONNECTION_TIMEOUT
         )
 
-        response.raise_for_status()  # throw exception on non 2xx HTTP statuses
+        response.raise_for_status()
+        response = response.json()
+        answer = response.get('content', '')
+        return answer
 
-        response = response.json()  # get JSON from response
-
-        answer = response['content']  # text of the LLM's response
-
-        return answer  # return text to client
-
-    # handle errors for better user-friendliness
     except Timeout:
         return "Request timed out. Please try again later."
     except requests.exceptions.RequestException as e:
-        error_msg = (
-            f"An error occurred: {str(e)}"
-            f" ---- is the server online?"
-        )
+        error_msg = f"An error occurred: {str(e)} ---- is the server online?"
         return error_msg
 
+
 def create_app():
-    """
-    Sets up the Flask server and handles web requests.
-    """
-
-    # print the server details to the console
-    print(
-        f"Starting server at: "
-        f"http://{BINDING_ADDRESS}:{BINDING_PORT}"
-    )
+    """Create and configure the Flask application."""
+    print(f"Starting server at: http://{BINDING_ADDRESS}:{BINDING_PORT}")
+    # Flask.__init__ does not accept a 'name' keyword argument; use the module name only.
     app = Flask(__name__)
-    app.name = f"{APPNAME} v{VERSION}"
 
-    # serve the UI to the user
     @app.route('/', methods=['GET', 'POST'])
     def index():
-        response = app.make_response(
-            render_template('index.html', selected_theme=UI_THEME)
-        )
+        response = app.make_response(render_template('index.html', selected_theme=UI_THEME))
         response.headers['Pragma'] = 'no-cache'
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         return response
 
-    # Chat management endpoints
     @app.route('/chats', methods=['POST'])
     def create_chat():
-        """Create a new chat session"""
+        """Create a new chat session (explicitly created by the user)."
+        """
         global CONTEXTS
         global chat_id_counter
 
@@ -223,8 +173,8 @@ def create_app():
         chat_id_counter += 1
         chat_id = f"chat-{chat_id_counter}"
 
-        # Create new Chat object
-        chat = Chat(chat_id, chat_name)
+        # User-created chats should not trigger auto-naming
+        chat = Chat(chat_id, chat_name, needs_naming=False)
         CONTEXTS[chat_id] = chat
 
         return jsonify({
@@ -235,15 +185,12 @@ def create_app():
 
     @app.route('/chats', methods=['GET'])
     def list_chats():
-        """List all chat sessions"""
         global CONTEXTS
-
         chats = []
         for chat_id, chat in CONTEXTS.items():
             if isinstance(chat, Chat):
                 chats.append(chat.to_dict())
             else:
-                # Handle legacy format (list of messages)
                 chat_name = f"Chat {len(chats) + 1}"
                 created_at = int(chat_id.split('-')[1]) if '-' in chat_id and chat_id.split('-')[1].isdigit() else int(time.time() * 1000)
                 chats.append({
@@ -252,14 +199,11 @@ def create_app():
                     'message_count': len(chat),
                     'created_at': created_at
                 })
-
         return jsonify(chats)
 
     @app.route('/chats/<chat_id>', methods=['PUT'])
     def update_chat(chat_id):
-        """Update a chat's name"""
         global CONTEXTS
-
         if chat_id not in CONTEXTS:
             return jsonify({'error': 'Chat not found'}), 404
 
@@ -269,86 +213,64 @@ def create_app():
 
         new_name = data['name']
         chat = CONTEXTS[chat_id]
-
         if isinstance(chat, Chat):
             chat.name = new_name
         else:
-            # For legacy format, we can't update the name
             return jsonify({'error': 'Cannot update name for legacy chat format'}), 400
 
-        return jsonify({
-            'id': chat_id,
-            'name': new_name
-        })
+        return jsonify({'id': chat_id, 'name': new_name})
 
     @app.route('/chats/<chat_id>', methods=['DELETE'])
     def delete_chat(chat_id):
-        """Delete a chat"""
         global CONTEXTS
-
         if chat_id not in CONTEXTS:
             return jsonify({'error': 'Chat not found'}), 404
-
         del CONTEXTS[chat_id]
         return jsonify({'message': f'Chat {chat_id} deleted'}), 200
 
     @app.route('/chats/<chat_id>/switch', methods=['POST'])
     def switch_chat(chat_id):
-        """Switch to a specific chat session"""
         global CONTEXTS
         global context
+        global CONTEXT
 
         if chat_id not in CONTEXTS:
             return jsonify({'error': 'Chat not found'}), 404
 
         chat = CONTEXTS[chat_id]
         if isinstance(chat, Chat):
-            context = chat.messages  # Use the chat's message list
+            CONTEXT = chat.messages
+            context = CONTEXT
         else:
-            context = chat  # Legacy format (list of messages)
+            CONTEXT = chat
+            context = CONTEXT
 
         return jsonify({'message': f'Switched to chat {chat_id}'})
 
     @app.route('/chats/<chat_id>/messages', methods=['GET'])
     def get_chat_messages(chat_id):
-        """Get messages for a specific chat"""
         global CONTEXTS
-
         if chat_id not in CONTEXTS:
             return jsonify({'error': 'Chat not found'}), 404
-
         chat = CONTEXTS[chat_id]
-        if isinstance(chat, Chat):
-            messages = chat.messages
-        else:
-            messages = chat  # Legacy format (list of messages)
-
+        messages = chat.messages if isinstance(chat, Chat) else chat
         return jsonify({'messages': messages})
 
-    # endpoint (http://your-ip/search)
     @app.route('/search', methods=['POST'])
     def web_request():
         session_id = request.args.get('session_id')
-        question = request.form['input_text']
-
-        # Debug logging
-        print(f"Debug: Received session ID: {session_id}")
-        print(f"Debug: Received question: {question}")
+        question = request.form.get('input_text', '')
 
         # Input validation
         if not question.strip():
-            print("Debug: Empty input detected.")
             return jsonify({'content': 'Empty input is not allowed.'}), 400
 
         if "'" in question or "--" in question or "DROP TABLE" in question.upper():
-            print("Debug: SQL injection detected.")
             return jsonify({'content': 'Invalid input detected.'}), 400
 
         response = app.make_response(jsonify(web_request_logic(session_id, question)))
         response.headers['Pragma'] = 'no-cache'
-        response.headers['Cache-Control'] = (
-            'no-cache, no-store, must-revalidate'
-        )
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         return response
 
     def web_request_logic(session_id, question):
@@ -356,127 +278,123 @@ def create_app():
         global CONTEXTS
         global CONTEXT
 
-        # retrieve session ID from request
-        print(f"Validating input: '{question}'")
-        # If no valid session_id was provided, create a new ephemeral session so the UI
-        # can submit prompts without needing to manage server-side session state.
+        # If no session_id or session doesn't exist, create a new server-side chat
         if not session_id or session_id not in CONTEXTS:
             new_session_id = f"chat-{int(time.time() * 1000)}"
-            CONTEXTS[new_session_id] = []
+            # Create a Chat object and mark it for auto-naming
+            friendly_default_name = f"Chat {len(CONTEXTS) + 1}"
+            chat = Chat(new_session_id, friendly_default_name, needs_naming=True)
+            CONTEXTS[new_session_id] = chat
             session_id = new_session_id
-            print(f"Info: Created new session ID: {session_id}")
 
-        # fetch or initialize the current context
-        print("Input validation passed.")
-        CONTEXT = CONTEXTS[session_id]
+        # set the module-level CONTEXT to point at this chat's messages list
+        chat = CONTEXTS[session_id]
+        if isinstance(chat, Chat):
+            CONTEXT = chat.messages
+        else:
+            CONTEXT = chat
 
-        # start recording response time
-        import logging
-
-        # Debug logging: Entering function and checking session state/log status
-        logging.debug("Entering 'web_request_logic' function.")
-        logging.debug(f"Session state or lock status before execution. Context size: {len(CONTEXT)}")
+        # start timing
         start_time = time.time()
 
-        # commands for manipulating context state
-        if question.lower() == 'context':  # show current context
+        # quick command handling
+        if question.lower() == 'context':
             context_history = ""
-            for llm_reply in CONTEXT:  # format into markdown codeblocks
-                context_history = (
-                    f"```\n"
-                    f"{llm_reply}"
-                    f"\n```\n"
-                )
-            answer = (
-                f"<md class='markdown-style'>"
-                f"{context_history}"
-                f"</md>"
-            )
+            for llm_reply in CONTEXT:
+                context_history = f"```\n{llm_reply}\n```\n"
+            answer = f"<md class='markdown-style'>{context_history}</md>"
             return {'content': answer}
-        if question.lower() == 'clear':  # erase context
-            CONTEXT = []  # initialize the context list
+        if question.lower() == 'clear':
+            if isinstance(chat, Chat):
+                chat.messages = []
+            else:
+                CONTEXT = []
             return {'content': "context cleared."}
-        if question.lower() == 'off':  # turn it off
-            CONTEXT = []  # initialize the context list
-            USE_CHAT_CONTEXT = False
+        if question.lower() == 'off':
+            if isinstance(chat, Chat):
+                chat.messages = []
+            CONTEXT = []
             return {'content': "context off."}
-        if question.lower() == 'on':  # turn it on
+        if question.lower() == 'on':
             USE_CHAT_CONTEXT = True
             return {'content': "context on."}
 
-        print(f"━━━━━━━━┫ Received request: {question}")
-
-        # if lock is acquired then this app is currently in use.
-        # we can currently only handle one request at a time.
+        # concurrency guard
         if lock.locked():
-            error_msg = "Sorry, I can only handle one request at a time and I'm currently busy."
-            return {
-                'result': error_msg
-            }
+            return {'result': "Sorry, I can only handle one request at a time and I'm currently busy."}
 
-        # if this app is free to process a request
         with lock:
-            answer = feed_the_llama(question)  # send to npu server
+            answer = feed_the_llama(question)
 
-        # update chat context
-        if USE_CHAT_CONTEXT:
+        # Update chat context
+        ignore_chinese_chars = False
+        if IGNORE_CHINESE:
+            ignore_chinese_chars = contains_chinese(answer)
 
-            ignore_chinese_chars = False
-
-            # check if user wants to ignore Chinese characters
-            if IGNORE_CHINESE:
-                ignore_chinese_chars = contains_chinese(answer)
-
-            # update context history
-            if not ignore_chinese_chars:
+        if not ignore_chinese_chars:
+            # Save the raw answer string as part of the chat's messages
+            if isinstance(chat, Chat):
+                chat.add_message(answer)
+            else:
                 CONTEXT.append(answer)
 
-                # trim context to desired depth by removing oldest element
-                if len(CONTEXT) > CONTEXT_DEPTH:
-                    CONTEXT.pop(0)
+        # After producing a response for a newly created chat, request a short name + emoji
+        try:
+            if isinstance(chat, Chat) and chat.needs_naming:
+                # Ask the LLM to propose a concise title and single emoji for the chat
+                naming_prompt = (
+                    "Please provide a very short (1-3 words) descriptive name for the conversation we just had, "
+                    "and a single emoji that summarizes it. Respond ONLY with a JSON object like: {\"name\": \"...\", \"emoji\": \"...\"}."
+                )
 
-        # modify the answer for markdown HTML tag to make it pretty
-        answer = (
-            f"<md class='markdown-style'>"
-            f"{answer}"
-            f"</md>"
-        )
+                with lock:
+                    naming_response = feed_the_llama(naming_prompt)
 
-        # print completed time
+                # Try to parse JSON
+                parsed = None
+                try:
+                    parsed = json.loads(naming_response)
+                except Exception:
+                    # If the response itself was wrapped (e.g. quoted JSON), try to extract a JSON substring
+                    m = re.search(r"(\{.*\})", naming_response, re.DOTALL)
+                    if m:
+                        try:
+                            parsed = json.loads(m.group(1))
+                        except Exception:
+                            parsed = None
+
+                if isinstance(parsed, dict):
+                    name = parsed.get('name', '').strip()
+                    emoji = parsed.get('emoji', '').strip()
+                    if name:
+                        # Prepend emoji if present
+                        if emoji:
+                            chat.name = f"{emoji} {name}"
+                        else:
+                            chat.name = name
+                    # Once named, don't ask again
+                    chat.needs_naming = False
+        except Exception:
+            # Naming is best-effort — if anything fails, don't block the primary response
+            pass
+
+        # Wrap the LLM answer in markdown tag for client
+        answer = f"<md class='markdown-style'>{answer}</md>"
+
         end_time = time.time()
         print(f"Completed in {end_time - start_time:.2f} seconds.")
 
-        # return answer to client
-        answer_markdown = {'content': answer}
-        return answer_markdown
+        return {'content': answer}
 
     return app
 
+
 def web_server() -> None:
-    """
-    Starts the Flask server.
-    """
-
-    # print the server details to the console
-    print(
-        f"Starting server at: "
-        f"http://{BINDING_ADDRESS}:{BINDING_PORT}"
-    )
-
+    print(f"Starting server at: http://{BINDING_ADDRESS}:{BINDING_PORT}")
     app = create_app()
-    app.run(
-        host=BINDING_ADDRESS,
-        port=BINDING_PORT,
-        debug=True
-    )
+    app.run(host=BINDING_ADDRESS, port=BINDING_PORT, debug=True)
 
 if __name__ == "__main__":
-
-    # control access since currently only one instance can run at a time
-    lock = threading.Lock()
-
-    # start Flask
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(message)s')
-
     logging.debug("Starting web server...")
     web_server()
