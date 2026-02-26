@@ -1,13 +1,12 @@
 import pytest
-pytest.skip('Skipping Selenium frontend tests in CI', allow_module_level=True)
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 import threading
 from npuchat import create_app, BINDING_ADDRESS, BINDING_PORT
+
+pytest.skip('Skipping Selenium frontend tests in CI', allow_module_level=True)
 
 @pytest.fixture(scope='session')
 def server():
@@ -78,8 +77,6 @@ class TestFrontendChatManagement:
             EC.presence_of_element_located((By.CLASS_NAME, "message"))
         )
 
-        first_chat_messages = driver.find_element(By.ID, "chat-messages").text
-
         # Create second chat
         new_chat_button.click()
 
@@ -91,8 +88,6 @@ class TestFrontendChatManagement:
         WebDriverWait(driver, 5).until(
             lambda d: "Message in second chat" in d.find_element(By.ID, "chat-messages").text
         )
-
-        second_chat_messages = driver.find_element(By.ID, "chat-messages").text
 
         # Switch back to first chat
         chat_list = driver.find_element(By.ID, "chat-list")

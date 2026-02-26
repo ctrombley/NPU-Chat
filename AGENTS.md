@@ -19,6 +19,13 @@
 5. Fixed test assertions to correctly check for chats with messages and adjusted waits for proper chat switching and persistence verification.
 6. All 18 tests now pass successfully.
 
+### Fixing Linter Errors:
+1. Fixed undefined `CONTEXT` variable in `npuchat.py` by adding global declaration in `feed_the_llama` function.
+2. Moved selenium imports to the top in `tests/test_frontend_chat_management.py` to comply with E402 rule (module level import not at top of file).
+3. Removed unused imports `webdriver` and `Options` from `tests/test_frontend_chat_management.py`.
+4. Removed unused variables `first_chat_messages` and `second_chat_messages` from test functions.
+5. All ruff linter checks now pass successfully.
+
 ---
 
 ## How to Run Tests
@@ -33,6 +40,12 @@ This repository contains a web-based bot interface (`npuchat.py`) leveraging Fla
 - Denying invalid server queries promptly.
 - Enhanced protection via Python `unittest-mock`
 
+## Feature: Auto-naming of New Chats
+- When a new chat is implicitly created by a /search request (i.e., no session_id provided), the server will now mark the Chat object with `needs_naming=True`.
+- After producing the first LLM response for that new chat, the server sends a follow-on prompt to the LLM asking for a short (1-3 words) descriptive name and a single emoji for the chat.
+- The server expects the LLM to reply with a JSON object like: {"name": "...", "emoji": "..."}. If a valid response is parsed, the server updates the chat's default name to include the emoji followed by the name. This operation is best-effort and will not affect the primary user response if it fails.
+
 ## Further Notes:
 Recent debugging included crucial steps verifying empty edge payloads/SQL-Injection seen SYSTEMIC Validation/processing coordinated both testing-path fixes!
+
 
