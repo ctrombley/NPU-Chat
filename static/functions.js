@@ -72,6 +72,16 @@ form.addEventListener('submit', function(event) {
         newResponse.innerHTML = `<p>${data.content}</p>`; //content = json key
         chatMessages.appendChild(newResponse);
 
+        // Save received message to current chat
+        if (currentChatId && chats[currentChatId]) {
+            chats[currentChatId].push({
+                type: 'received',
+                text: data.content,
+                timestamp: Date.now()
+            });
+            saveChatsToStorage();
+        }
+
         // Call the renderMarkdown() function of Markdown-Tag
         renderMarkdown(newResponse);
 
@@ -104,6 +114,16 @@ form.addEventListener('submit', function(event) {
         failedMessage.innerHTML = '<p>Failed to fetch. Is the server for this UI offline?</p>';
         chatMessages.appendChild(failedMessage);
 
+        // Save error message to current chat
+        if (currentChatId && chats[currentChatId]) {
+            chats[currentChatId].push({
+                type: 'received',
+                text: 'Failed to fetch. Is the server for this UI offline?',
+                timestamp: Date.now()
+            });
+            saveChatsToStorage();
+        }
+
         // Hide loader and loader:before and unhide send-icon
         // this stops the animation
         loader.style.display = 'none';
@@ -115,6 +135,148 @@ form.addEventListener('submit', function(event) {
     });
 
     document.getElementById('input_text').value = '';
+});
+
+/*Functionality for managing chats*/
+const chatList = document.getElementById('chat-list');
+const newChatButton = document.getElementById('new-chat-button');
+const chats = {}; // Store chat histories here.
+let currentChatId = null;
+
+// Load chats from localStorage on page load
+function loadChatsFromStorage() {
+    const storedChats = localStorage.getItem('chats');
+    if (storedChats) {
+        const parsedChats = JSON.parse(storedChats);
+        Object.assign(chats, parsedChats);
+
+        // Recreate chat list UI
+        for (const chatId in chats) {
+            addChatToUI(chatId);
+        }
+    }
+}
+
+// Save chats to localStorage
+function saveChatsToStorage() {
+    localStorage.setItem('chats', JSON.stringify(chats));
+}
+
+// Create a new chat ID
+function generateChatId() {
+    return `chat-${Date.now()}`;
+}
+
+// Add chat to the UI
+function addChatToUI(chatId) {
+    const chatElement = document.createElement('li');
+    chatElement.className = 'chat-item';
+    chatElement.dataset.chatId = chatId;
+
+    const chatName = document.createElement('span');
+    chatName.className = 'chat-name';
+    chatName.textContent = `Chat ${Object.keys(chats).length}`;
+    chatName.addEventListener('click', () => switchChat(chatId));
+
+    const deleteButton = document.createElement('button');
+    deleteButton.className = 'delete-chat';
+    deleteButton.textContent = '×';
+    deleteButton.title = 'Delete chat';
+    deleteButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteChat(chatId);
+    });
+
+    chatElement.appendChild(chatName);
+    chatElement.appendChild(deleteButton);
+    chatList.appendChild(chatElement);
+}
+
+function switchChat(chatId) {
+    if (!chats[chatId]) return;
+
+    // Save current chat ID to localStorage
+    localStorage.setItem('currentChatId', chatId);
+
+    currentChatId = chatId;
+    chatMessages.innerHTML = '';
+
+    // Mark active chat
+    document.querySelectorAll('.chat-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    document.querySelector(`[data-chat-id="${chatId}"]`).classList.add('active');
+
+    // Load messages for this chat
+    chats[chatId].forEach(message => {
+        const newMessage = document.createElement('div');
+        newMessage.className = `message ${message.type}`;
+        newMessage.innerHTML = `<p>${message.text}</p>`;
+        chatMessages.appendChild(newMessage);
+    });
+
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function addChat(chatId) {
+    chats[chatId] = [];
+    addChatToUI(chatId);
+    saveChatsToStorage();
+}
+
+function deleteChat(chatId) {
+    if (!chats[chatId]) return;
+
+    // Remove from storage
+    delete chats[chatId];
+    saveChatsToStorage();
+
+    // Remove from UI
+    const chatElement = document.querySelector(`[data-chat-id="${chatId}"]`);
+    if (chatElement) {
+        chatElement.remove();
+    }
+
+    // If this was the current chat, switch to another chat or create new one
+    if (currentChatId === chatId) {
+        const remainingChats = Object.keys(chats);
+        if (remainingChats.length > 0) {
+            switchChat(remainingChats[0]);
+        } else {
+            // Create a new chat if no chats remain
+            const newChatId = generateChatId();
+            addChat(newChatId);
+            switchChat(newChatId);
+        }
+        localStorage.removeItem('currentChatId');
+    }
+}
+
+// Initialize chat management
+document.addEventListener('DOMContentLoaded', function() {
+    // Load existing chats
+    loadChatsFromStorage();
+
+    // If no chats exist, create the first one
+    if (Object.keys(chats).length === 0) {
+        const firstChatId = generateChatId();
+        addChat(firstChatId);
+        switchChat(firstChatId);
+    } else {
+        // Restore the last active chat or switch to first available
+        const lastChatId = localStorage.getItem('currentChatId');
+        if (lastChatId && chats[lastChatId]) {
+            switchChat(lastChatId);
+        } else {
+            switchChat(Object.keys(chats)[0]);
+        }
+    }
+});
+
+newChatButton.addEventListener('click', () => {
+    const chatId = generateChatId();
+    addChat(chatId);
+    switchChat(chatId);
 });
 
 /*
@@ -142,6 +304,16 @@ sendButton.addEventListener('click', function() {
         newMessage.classList.add('message', 'sent');
         chatMessages.appendChild(newMessage);
         chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        // Save sent message to current chat
+        if (currentChatId && chats[currentChatId]) {
+            chats[currentChatId].push({
+                type: 'sent',
+                text: inputText,
+                timestamp: Date.now()
+            });
+            saveChatsToStorage();
+        }
 
         const sendIcon = document.querySelector('.send-icon');
         sendIcon.style.display = 'none';

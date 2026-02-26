@@ -26,10 +26,11 @@ Chat interface for LLM running on RK3588 NPU. Responsive design for desktop & mo
 ![Screenshot 01](https://github.com/av1d/NPU-Chat/blob/main/screenshots/desktop.png)  
 
 
-**install:**  
-You must first be running https://github.com/av1d/rk3588_npu_llm_server  
-then:  
-`python3 -m pip install -r requirements.txt`  
+**test:**
+Run the tests to ensure proper functionality:
+```
+python3 -m pytest tests
+```
 
 **configure:**  
 Edit `settings.ini` with your information.  

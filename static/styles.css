@@ -122,10 +122,14 @@ body {
 .message-input-container {
   position: fixed;
   bottom: 0;
-  width: 100%;
+  left: 200px;
+  width: calc(100% - 200px);
   background-color: transparent;
   padding: 10px;
   display: flex;
+  z-index: 20;
+  max-height: 200px;
+  overflow: hidden;
 }
 
 .message-input {
@@ -140,6 +144,7 @@ body {
   color: #fff;
   font-size: 16px;
   margin-right: 10px;
+  max-height: 150px;
 }
 
 .message-input:focus {
@@ -349,6 +354,129 @@ li::marker {
 /* Handle on hover */
 ::-webkit-scrollbar-thumb:hover {
     background: #00;
+}
+
+/* Chat management styles */
+.chat-list-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 200px;
+  height: 100%;
+  background: #1a1a1a;
+  border-right: 1px solid #333;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.chat-list-container h3 {
+  margin: 10px;
+  color: #f5f5f5;
+  font-size: 16px;
+  border-bottom: 1px solid #333;
+  padding-bottom: 5px;
+}
+
+#chat-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.chat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  cursor: pointer;
+  border-bottom: 1px solid #333;
+  transition: background-color 0.2s;
+}
+
+.chat-item:hover {
+  background-color: #2a2a2a;
+}
+
+.chat-item.active {
+  background-color: #3a3a3a;
+  border-left: 3px solid #9805b5;
+}
+
+.chat-name {
+  flex: 1;
+  font-size: 14px;
+  color: #f5f5f5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.delete-chat {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: color 0.2s;
+}
+
+.delete-chat:hover {
+  color: #ff6b6b;
+  background-color: #333;
+}
+
+#new-chat-button {
+  width: 100%;
+  padding: 10px;
+  margin: 10px 0;
+  background: #9805b5;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+#new-chat-button:hover {
+  background: #b025d1;
+}
+
+/* Adjust chat container to account for sidebar */
+.chat-container {
+  left: 200px;
+  right: 0;
+}
+
+/* Mobile adjustments */
+@media (max-width: 767px) {
+  .chat-list-container {
+    width: 100%;
+    height: auto;
+    position: relative;
+    border-right: none;
+    border-bottom: 1px solid #333;
+  }
+
+  .chat-container {
+    left: 0;
+    bottom: 90px;
+  }
+
+  #chat-list {
+    display: flex;
+    overflow-x: auto;
+    padding: 5px;
+  }
+
+  .chat-item {
+    flex: 0 0 auto;
+    min-width: 120px;
+    border-bottom: none;
+    border-right: 1px solid #333;
+  }
 }
 
 
