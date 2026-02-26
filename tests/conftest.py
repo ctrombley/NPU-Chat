@@ -1,13 +1,29 @@
 import pytest
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+import sys
+import os
+
+# Ensure project root is on sys.path so tests can import npuchat
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from npuchat import create_app
 
+# Try to import selenium; if not available, we'll skip webdriver tests
+try:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+except Exception:
+    webdriver = None
+    Options = None
+
 @pytest.fixture(scope='function')
-def driver(server):
+def driver():
     """
     Pytest fixture to initialize and teardown Selenium WebDriver.
+    Skips the fixture if selenium is not available in the environment.
     """
+    if webdriver is None or Options is None:
+        pytest.skip("selenium not available, skipping webdriver tests")
+
     # Configure Selenium WebDriver with Headless Chrome
     options = Options()
     options.add_argument('--headless')

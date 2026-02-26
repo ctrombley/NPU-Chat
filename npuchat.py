@@ -358,8 +358,13 @@ def create_app():
 
         # retrieve session ID from request
         print(f"Validating input: '{question}'")
+        # If no valid session_id was provided, create a new ephemeral session so the UI
+        # can submit prompts without needing to manage server-side session state.
         if not session_id or session_id not in CONTEXTS:
-            return {'content': 'Invalid or missing session ID.'}
+            new_session_id = f"chat-{int(time.time() * 1000)}"
+            CONTEXTS[new_session_id] = []
+            session_id = new_session_id
+            print(f"Info: Created new session ID: {session_id}")
 
         # fetch or initialize the current context
         print("Input validation passed.")

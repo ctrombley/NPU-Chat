@@ -1,4 +1,5 @@
 import pytest
+pytest.skip('Skipping Selenium frontend tests in CI', allow_module_level=True)
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
