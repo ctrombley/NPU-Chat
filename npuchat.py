@@ -306,27 +306,105 @@ def create_app() -> Flask:
         start_time = time.time()
 
         # quick command handling
-        if question.lower() == 'context':
-            context_history = ""
-            for llm_reply in current_context:
-                # Append each message to build a full history instead of overwriting
-                context_history += f"```\n{llm_reply}\n```\n"
+        cmd = question.strip().lower()
+
+        # Helper to render messages list as markdown blocks
+        def render_messages(msgs: List[str]) -> str:
+            out = ""
+            for m in msgs:
+                out += f"```\n{m}\n```\n"
+            return out
+
+        if cmd == 'context':
+            # Ensure current_context reflects the chat's messages list
+            if isinstance(chat, Chat):
+                current_context = chat.messages
+            else:
+                current_context = chat
+
+            context_history = render_messages(current_context)
             answer = f"<md class='markdown-style'>{context_history}</md>"
             return {'content': answer, 'session_id': session_id}
-        if question.lower() == 'clear':
+
+        if cmd == 'clear':
             if isinstance(chat, Chat):
                 chat.messages = []
+                current_context = chat.messages
             else:
-                current_context = []
+                # mutate the existing list referenced by current_context
+                if isinstance(current_context, list):
+                    current_context.clear()
+                else:
+                    current_context = []
             return {'content': "context cleared.", 'session_id': session_id}
-        if question.lower() == 'off':
+
+        if cmd == 'off':
+            use_chat_context = False
             if isinstance(chat, Chat):
                 chat.messages = []
-            current_context = []
+                current_context = chat.messages
+            else:
+                if isinstance(current_context, list):
+                    current_context.clear()
+                else:
+                    current_context = []
             return {'content': "context off.", 'session_id': session_id}
-        if question.lower() == 'on':
+
+        if cmd == 'on':
             use_chat_context = True
             return {'content': "context on.", 'session_id': session_id}
+
+        # Debugging commands
+        # "sessions" - list all session ids and basic metadata
+        if cmd == 'sessions':
+            sessions = []
+            for sid, s in contexts.items():
+                if isinstance(s, Chat):
+                    sessions.append({'id': sid, 'name': s.name, 'messages': len(s.messages)})
+                else:
+                    sessions.append({'id': sid, 'name': str(sid), 'messages': len(s)})
+            return {'content': json.dumps({'sessions': sessions}, indent=2), 'session_id': session_id}
+
+        # "dump <chat_id>" - return messages for a given chat
+        if cmd.startswith('dump '):
+            parts = cmd.split(maxsplit=1)
+            if len(parts) == 2:
+                dump_id = parts[1]
+                if dump_id in contexts:
+                    target = contexts[dump_id]
+                    msgs = target.messages if isinstance(target, Chat) else target
+                    return {'content': render_messages(msgs), 'session_id': session_id}
+                else:
+                    return {'content': f'chat {dump_id} not found', 'session_id': session_id}
+
+        # "show_config" - display key config values useful for debugging
+        if cmd == 'show_config':
+            cfg = {
+                'BINDING_ADDRESS': BINDING_ADDRESS,
+                'BINDING_PORT': BINDING_PORT,
+                'NPU_ADDRESS': NPU_ADDRESS,
+                'NPU_PORT': NPU_PORT,
+                'CONNECTION_TIMEOUT': CONNECTION_TIMEOUT,
+                'use_chat_context': use_chat_context,
+                'CONTEXT_DEPTH': CONTEXT_DEPTH,
+                'ignore_chinese': ignore_chinese,
+                'UI_THEME': UI_THEME
+            }
+            return {'content': json.dumps(cfg, indent=2), 'session_id': session_id}
+
+        # "help" - list available quick/debug commands
+        if cmd == 'help':
+            help_text = (
+                "Available quick commands:\n"
+                "- context: show current chat context messages\n"
+                "- clear: clear current chat context\n"
+                "- on / off: enable or disable use of chat context for LLM calls\n"
+                "- sessions: list existing server sessions\n"
+                "- dump <chat_id>: show messages for a session\n"
+                "- show_config: display server config values\n"
+                "- help: show this message\n"
+            )
+            return {'content': help_text, 'session_id': session_id}
 
         # concurrency guard
         if lock.locked():

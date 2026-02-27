@@ -72,6 +72,55 @@ form.addEventListener('submit', function(event) {
         newResponse.innerHTML = `<p>${data.content}</p>`; //content = json key
         chatMessages.appendChild(newResponse);
 
+        // If server returned a session_id, migrate local chat to use it and update UI name
+        if (data.session_id) {
+            const serverSid = data.session_id;
+
+            // If currentChatId exists and differs from serverSid, migrate messages and update storage
+            if (currentChatId && currentChatId !== serverSid) {
+                // Move messages from temporary local chat to server session id
+                if (!chats[serverSid]) {
+                    chats[serverSid] = chats[currentChatId] || [];
+                } else {
+                    // append messages to existing server-side mapped chat
+                    chats[serverSid] = chats[serverSid].concat(chats[currentChatId] || []);
+                }
+                // Remove old local chat id
+                delete chats[currentChatId];
+                saveChatsToStorage();
+
+                // Update chat list UI element to use serverSid as data-chat-id
+                const oldElem = document.querySelector(`[data-chat-id="${currentChatId}"]`);
+                if (oldElem) {
+                    oldElem.dataset.chatId = serverSid;
+                    // Also update click handler to switch to new id
+                    oldElem.querySelector('.chat-name').removeEventListener && null; // noop to avoid errors
+                }
+
+                currentChatId = serverSid;
+                localStorage.setItem('currentChatId', serverSid);
+            }
+
+            // Fetch server chat metadata (name + emoji) and update UI label
+            fetch(`/chats`)
+                .then(resp => resp.json())
+                .then(chatListData => {
+                    const serverChat = chatListData.find(c => c.id === serverSid);
+                    if (serverChat) {
+                        const elem = document.querySelector(`[data-chat-id="${serverSid}"]`);
+                        if (elem) {
+                            const nameSpan = elem.querySelector('.chat-name');
+                            if (nameSpan) {
+                                nameSpan.textContent = serverChat.name || nameSpan.textContent;
+                            }
+                        }
+                    }
+                })
+                .catch(() => {
+                    // ignore failures to fetch metadata
+                });
+        }
+
         // Save received message to current chat
         if (currentChatId && chats[currentChatId]) {
             chats[currentChatId].push({
