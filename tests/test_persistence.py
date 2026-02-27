@@ -28,7 +28,7 @@ def test_auto_naming_and_persistence(monkeypatch):
         json.dumps({"name": "Quick Help", "emoji": "⚡"})
     ]
 
-    def fake_feed(query):
+    def fake_feed(query, prefix, postfix):
         if responses:
             return responses.pop(0)
         return ""

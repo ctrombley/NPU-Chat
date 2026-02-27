@@ -75,13 +75,16 @@ Recent debugging included crucial steps verifying empty edge payloads/SQL-Inject
 ### Context/session fixes (this change)
 - /search responses now always include a session_id field. Quick-command responses (context, clear, on, off), the concurrency-guard, and the primary LLM response include session_id so clients can persist the server-side session id and maintain context across subsequent requests.
 
-## Editable Chat Metadata (this change)
-- Made chat titles and emojis editable by users through double-click on the chat items in the sidebar.
-- Backend PUT /chats/<chat_id> now accepts optional 'name' and/or 'emoji' fields to update metadata.
-- Updates are persisted immediately to the database.
-- Frontend displays emoji followed by name, with individual double-click editing for each.
-- Added comprehensive tests in `tests/test_persistence.py` for metadata updates and persistence.
-- All tests pass, and functionality verified.
+## Editable Prompt Templates (this change)
+- Added backend API for managing prompt templates: GET /templates (list), POST /templates (create), PUT /templates/<id> (update), DELETE /templates/<id> (delete, except default).
+- Templates are persisted to `data/templates.json` with fields: id, name, prefix, postfix.
+- Chats have a `template_id` field that references a template; defaults to 'default' if not set or invalid.
+- When sending messages, the chat's template prefix and postfix are used in the LLM request.
+- Frontend has a "Manage Templates" button that shows a templates panel with list, edit, and delete options.
+- Templates can be created and edited via prompts (simple UI).
+- Updated feed_the_llama to accept prefix and postfix parameters.
+- Fixed test monkeypatch to match new signature.
+- All tests pass, including new template functionality.
 
 
 

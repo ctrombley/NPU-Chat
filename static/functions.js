@@ -532,5 +532,87 @@ function copyDivContents(divId) {
     button.classList.remove('animate');
   }, 1000);
 
-  console.log('Copied text:', mdText);
+const templatesList = document.getElementById('templates-list');
+const manageTemplatesButton = document.getElementById('manage-templates-button');
+const newTemplateButton = document.getElementById('new-template-button');
+const backToChatsButton = document.getElementById('back-to-chats-button');
+const templatesContainer = document.getElementById('templates-container');
+const chatListContainer = document.querySelector('.chat-list-container');
+
+function loadTemplates() {
+    fetch('/templates')
+    .then(resp => resp.json())
+    .then(data => {
+        templatesList.innerHTML = '';
+        data.forEach(template => {
+            addTemplateToUI(template);
+        });
+    });
 }
+
+function addTemplateToUI(template) {
+    const li = document.createElement('li');
+    li.className = 'template-item';
+    li.dataset.templateId = template.id;
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = template.name;
+    const editBtn = document.createElement('button');
+    editBtn.textContent = 'Edit';
+    editBtn.addEventListener('click', () => editTemplate(template.id));
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'delete-template';
+    deleteBtn.textContent = '×';
+    deleteBtn.addEventListener('click', () => deleteTemplate(template.id));
+    li.appendChild(nameSpan);
+    li.appendChild(editBtn);
+    li.appendChild(deleteBtn);
+    templatesList.appendChild(li);
+}
+
+function editTemplate(templateId) {
+    // Fetch current template
+    fetch(`/templates/${templateId}`)
+    .then(resp => resp.json())
+    .then(template => {
+        const newName = prompt('Enter new name:', template.name);
+        const newPrefix = prompt('Enter new prefix:', template.prefix);
+        const newPostfix = prompt('Enter new postfix:', template.postfix);
+        if (newName && newPrefix !== null && newPostfix !== null) {
+            fetch(`/templates/${templateId}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name: newName, prefix: newPrefix, postfix: newPostfix})
+            }).then(() => loadTemplates());
+        }
+    });
+}
+
+function deleteTemplate(templateId) {
+    if (confirm('Delete this template?')) {
+        fetch(`/templates/${templateId}`, {method: 'DELETE'}).then(() => loadTemplates());
+    }
+}
+
+manageTemplatesButton.addEventListener('click', () => {
+    chatListContainer.style.display = 'none';
+    templatesContainer.style.display = 'block';
+    loadTemplates();
+});
+
+backToChatsButton.addEventListener('click', () => {
+    templatesContainer.style.display = 'none';
+    chatListContainer.style.display = 'block';
+});
+
+newTemplateButton.addEventListener('click', () => {
+    const name = prompt('Enter template name:');
+    const prefix = prompt('Enter prefix:');
+    const postfix = prompt('Enter postfix:');
+    if (name && prefix !== null && postfix !== null) {
+        fetch('/templates', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name, prefix, postfix})
+        }).then(() => loadTemplates());
+    }
+});

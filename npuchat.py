@@ -63,6 +63,9 @@ os.makedirs(DATA_DIR, exist_ok=True)
 # SQLite DB path
 DB_PATH = os.path.join(DATA_DIR, 'chats.db')
 
+# Templates file
+TEMPLATES_PATH = os.path.join(DATA_DIR, 'templates.json')
+
 # Contexts store multiple chat sessions; keys are chat ids and values are Chat objects
 contexts: Dict[str, 'Chat'] = {}
 # Backwards-compatible alias expected by tests
@@ -71,6 +74,9 @@ CONTEXTS = contexts
 current_context: List[str] = []
 # Keep legacy alias (some earlier code uses 'context')
 context = current_context
+
+# Prompt templates: Dict[id, {'id': str, 'name': str, 'prefix': str, 'postfix': str}]
+templates: Dict[str, Dict[str, str]] = {}
 
 # A lock to guard concurrent requests — define at module level so routes can use it
 lock = threading.Lock()
@@ -84,6 +90,7 @@ class Chat:
     id: str
     name: str
     emoji: str = ''
+    template_id: str = 'default'
     needs_naming: bool = False
     messages: List[str] = field(default_factory=list)
     created_at: int = field(default_factory=lambda: int(time.time() * 1000))
@@ -121,37 +128,64 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
-
-def init_db():
-    """Initialize the SQLite database and required tables."""
+def init_db() -> None:
+    """Initialize the SQLite database with required tables."""
     conn = get_db_connection()
     try:
-        cur = conn.cursor()
-        cur.execute(
-            """
+        conn.execute('''
             CREATE TABLE IF NOT EXISTS chats (
                 id TEXT PRIMARY KEY,
                 name TEXT,
-                emoji TEXT,
-                needs_naming INTEGER,
+                emoji TEXT DEFAULT '',
+                template_id TEXT DEFAULT 'default',
+                needs_naming INTEGER DEFAULT 0,
                 created_at INTEGER
             )
-            """
-        )
-        cur.execute(
-            """
+        ''')
+        conn.execute('''
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 chat_id TEXT,
                 content TEXT,
                 position INTEGER,
-                FOREIGN KEY(chat_id) REFERENCES chats(id) ON DELETE CASCADE
+                FOREIGN KEY (chat_id) REFERENCES chats (id)
             )
-            """
-        )
+        ''')
         conn.commit()
+    except Exception:
+        logging.exception("Failed to initialize database")
     finally:
         conn.close()
+
+
+def save_templates() -> None:
+    """Save templates to JSON file."""
+    global templates
+    try:
+        with open(TEMPLATES_PATH, 'w') as f:
+            json.dump(templates, f, indent=2)
+    except Exception:
+        logging.exception("Failed to save templates")
+
+def load_templates() -> None:
+    """Load templates from JSON file, or create default if none exists."""
+    global templates
+    if os.path.exists(TEMPLATES_PATH):
+        try:
+            with open(TEMPLATES_PATH, 'r') as f:
+                templates = json.load(f)
+        except Exception:
+            logging.exception("Failed to load templates, using default")
+            templates = {}
+    else:
+        # Create default template
+        templates['default'] = {
+            'id': 'default',
+            'name': 'Default',
+            'prefix': "<|im_start|>system You are a helpful assistant. <|im_end|> <|im_start|>user ",
+            'postfix': " <|im_end|><|im_start|>assistant "
+        }
+        save_templates()
 
 
 def save_chat_to_disk(chat_id: str) -> None:
@@ -165,8 +199,8 @@ def save_chat_to_disk(chat_id: str) -> None:
         cur = conn.cursor()
         if isinstance(chat, Chat):
             cur.execute(
-                "INSERT OR REPLACE INTO chats (id, name, emoji, needs_naming, created_at) VALUES (?, ?, ?, ?, ?)",
-                (chat.id, chat.name, chat.emoji, 1 if chat.needs_naming else 0, chat.created_at)
+                "INSERT OR REPLACE INTO chats (id, name, emoji, template_id, needs_naming, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (chat.id, chat.name, chat.emoji, chat.template_id, 1 if chat.needs_naming else 0, chat.created_at)
             )
             # Replace messages: delete existing and insert current list
             cur.execute("DELETE FROM messages WHERE chat_id = ?", (chat.id,))
@@ -203,7 +237,7 @@ def load_chats_from_disk() -> None:
         init_db()
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("SELECT id, name, emoji, needs_naming, created_at FROM chats")
+        cur.execute("SELECT id, name, emoji, template_id, needs_naming, created_at FROM chats")
         rows = cur.fetchall()
         for row in rows:
             chat_id = row['id']
@@ -217,7 +251,8 @@ def load_chats_from_disk() -> None:
             msg_rows = cur.fetchall()
             messages = [r['content'] for r in msg_rows]
 
-            chat = Chat(chat_id, name, emoji=emoji, needs_naming=needs_naming, messages=messages, created_at=created_at)
+            template_id = row['template_id'] if row['template_id'] else 'default'
+            chat = Chat(chat_id, name, emoji=emoji, template_id=template_id, needs_naming=needs_naming, messages=messages, created_at=created_at)
             contexts[chat_id] = chat
     except Exception:
         logging.exception("Failed to load chats from SQLite")
@@ -228,7 +263,7 @@ def load_chats_from_disk() -> None:
             pass
 
 
-def feed_the_llama(query: str) -> str:
+def feed_the_llama(query: str, prefix: str, postfix: str) -> str:
     """Send the user's query to the NPU server and return the text content.
 
     When using chat context, we prepend recent messages to the query. However, web_request_logic
@@ -262,15 +297,6 @@ def feed_the_llama(query: str) -> str:
                 llm_output_history = f"{llm_output_history}```\n{llm_reply}\n```\n"
 
             query = llm_output_history + query
-
-    prefix = (
-        "<|im_start|>system You are a helpful assistant. <|im_end|> "
-        "<|im_start|>user "
-    )
-
-    postfix = (
-        "<|im_end|><|im_start|>assistant "
-    )
 
     json_data = {
         'PROMPT_TEXT_PREFIX': prefix,
@@ -309,6 +335,9 @@ def create_app() -> Flask:
 
     # Load persisted chats into memory at app startup
     load_chats_from_disk()
+
+    # Load persisted templates
+    load_templates()
 
     @app.route('/', methods=['GET', 'POST'])
     def index():
@@ -382,15 +411,18 @@ def create_app() -> Flask:
         # Update emoji if provided
         if 'emoji' in data:
             chat.emoji = data['emoji']
+        # Update template_id if provided
+        if 'template_id' in data:
+            chat.template_id = data['template_id']
 
         # At least one field must be provided
-        if 'name' not in data and 'emoji' not in data:
-            return jsonify({'error': 'At least one of name or emoji must be provided'}), 400
+        if 'name' not in data and 'emoji' not in data and 'template_id' not in data:
+            return jsonify({'error': 'At least one of name, emoji, or template_id must be provided'}), 400
 
         # Persist change
         save_chat_to_disk(chat_id)
 
-        return jsonify({'id': chat_id, 'name': chat.name, 'emoji': chat.emoji})
+        return jsonify({'id': chat_id, 'name': chat.name, 'emoji': chat.emoji, 'template_id': chat.template_id})
 
     @app.route('/chats/<chat_id>', methods=['DELETE'])
     def delete_chat(chat_id: str):
@@ -444,6 +476,64 @@ def create_app() -> Flask:
         chat = contexts[chat_id]
         messages = chat.messages if isinstance(chat, Chat) else chat
         return jsonify({'messages': messages})
+
+    @app.route('/templates', methods=['GET'])
+    def list_templates():
+        global templates
+        return jsonify(list(templates.values()))
+
+    @app.route('/templates', methods=['POST'])
+    def create_template():
+        global templates
+        data = request.get_json()
+        if not data or 'name' not in data or 'prefix' not in data or 'postfix' not in data:
+            return jsonify({'error': 'name, prefix, and postfix are required'}), 400
+
+        template_id = f"template-{int(time.time() * 1000)}"
+        template = {
+            'id': template_id,
+            'name': data['name'],
+            'prefix': data['prefix'],
+            'postfix': data['postfix']
+        }
+        templates[template_id] = template
+        save_templates()
+        return jsonify(template), 201
+
+    @app.route('/templates/<template_id>', methods=['PUT'])
+    def update_template(template_id: str):
+        global templates
+        if template_id not in templates:
+            return jsonify({'error': 'Template not found'}), 404
+        if template_id == 'default':
+            return jsonify({'error': 'Cannot update default template'}), 400
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Request body is required'}), 400
+
+        template = templates[template_id]
+        if 'name' in data:
+            template['name'] = data['name']
+        if 'prefix' in data:
+            template['prefix'] = data['prefix']
+        if 'postfix' in data:
+            template['postfix'] = data['postfix']
+
+        save_templates()
+        return jsonify(template)
+
+    @app.route('/templates/<template_id>', methods=['DELETE'])
+    def delete_template(template_id: str):
+        global templates
+        if template_id not in templates:
+            return jsonify({'error': 'Template not found'}), 404
+        if template_id == 'default':
+            return jsonify({'error': 'Cannot delete default template'}), 400
+
+        del templates[template_id]
+        save_templates()
+        return jsonify({'message': f'Template {template_id} deleted'}), 200
 
     @app.route('/search', methods=['POST'])
     def web_request():
@@ -583,6 +673,21 @@ def create_app() -> Flask:
             )
             return {'content': help_text, 'session_id': session_id}
 
+        # Get template for the chat
+        if isinstance(chat, Chat):
+            template_id = chat.template_id
+            template = templates.get(template_id)
+            if template:
+                prefix = template['prefix']
+                postfix = template['postfix']
+            else:
+                prefix = templates['default']['prefix']
+                postfix = templates['default']['postfix']
+        else:
+            # legacy, use default
+            prefix = templates['default']['prefix']
+            postfix = templates['default']['postfix']
+
         if lock.locked():
             return {'result': "Sorry, I can only handle one request at a time and I'm currently busy.", 'session_id': session_id}
 
@@ -593,7 +698,7 @@ def create_app() -> Flask:
             else:
                 current_context.append(f"User: {question}")
 
-            raw_answer = feed_the_llama(question)
+            raw_answer = feed_the_llama(question, prefix, postfix)
 
         ignore_chinese_chars = False
         if ignore_chinese:
@@ -614,7 +719,7 @@ def create_app() -> Flask:
                 )
 
                 with lock:
-                    naming_response = feed_the_llama(naming_prompt)
+                    naming_response = feed_the_llama(naming_prompt, templates['default']['prefix'], templates['default']['postfix'])
 
                 parsed: Optional[Dict[str, Any]] = None
                 try:
