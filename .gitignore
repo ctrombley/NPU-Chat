@@ -46,3 +46,6 @@ logs
 # Misc
 *.sqlite3
 
+# Data folder for chats
+data/
+
