@@ -304,7 +304,8 @@ def create_app() -> Flask:
         if question.lower() == 'context':
             context_history = ""
             for llm_reply in current_context:
-                context_history = f"```\n{llm_reply}\n```\n"
+                # Append each message to build a full history instead of overwriting
+                context_history += f"```\n{llm_reply}\n```\n"
             answer = f"<md class='markdown-style'>{context_history}</md>"
             return {'content': answer, 'session_id': session_id}
         if question.lower() == 'clear':
@@ -327,19 +328,25 @@ def create_app() -> Flask:
             return {'result': "Sorry, I can only handle one request at a time and I'm currently busy.", 'session_id': session_id}
 
         with lock:
-            answer = feed_the_llama(question)
+            # Save the user's message into the chat history so subsequent LLM calls see full context
+            if isinstance(chat, Chat):
+                chat.add_message(f"User: {question}")
+            else:
+                current_context.append(f"User: {question}")
+
+            raw_answer = feed_the_llama(question)
 
         # Update chat context
         ignore_chinese_chars = False
         if ignore_chinese:
-            ignore_chinese_chars = contains_chinese(answer)
+            ignore_chinese_chars = contains_chinese(raw_answer)
 
         if not ignore_chinese_chars:
-            # Save the raw answer string as part of the chat's messages
+            # Save the assistant reply prefixed so context clearly indicates the speaker
             if isinstance(chat, Chat):
-                chat.add_message(answer)
+                chat.add_message(f"Assistant: {raw_answer}")
             else:
-                current_context.append(answer)
+                current_context.append(f"Assistant: {raw_answer}")
 
         # After producing a response for a newly created chat, request a short name + emoji
         try:
@@ -382,12 +389,12 @@ def create_app() -> Flask:
             pass
 
         # Wrap the LLM answer in markdown tag for client
-        answer = f"<md class='markdown-style'>{answer}</md>"
+        answer = f"<md class='markdown-style'>{raw_answer}</md>"
 
         end_time = time.time()
         print(f"Completed in {end_time - start_time:.2f} seconds.")
 
-        return {'content': answer}
+        return {'content': answer, 'session_id': session_id}
 
     return app
 
