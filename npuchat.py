@@ -41,7 +41,12 @@ def load_config(script_dir: str) -> None:
     CONNECTION_TIMEOUT = int(parser.get('timeout', 'TIMEOUT'))
 
     use_chat_context = parser.getboolean('context', 'USE_CONTEXT', fallback=False)
-    CONTEXT_DEPTH = int(parser.get('context', 'DEPTH'))
+    # Ensure a sensible minimum context depth so both the user's message and the assistant's reply can be kept
+    raw_context_depth = int(parser.get('context', 'DEPTH'))
+    CONTEXT_DEPTH = max(2, raw_context_depth)
+    if raw_context_depth < 2:
+        logging.debug(f"CONTEXT_DEPTH was {raw_context_depth}, increased to {CONTEXT_DEPTH} to retain both user and assistant messages.")
+
     ignore_chinese = parser.getboolean('context', 'IGNORE_CHINESE', fallback=False)
 
     UI_THEME = parser.get('theme', 'THEME')

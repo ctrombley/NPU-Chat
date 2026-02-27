@@ -45,10 +45,18 @@ This repository contains a web-based bot interface (`npuchat.py`) leveraging Fla
 - After producing the first LLM response for that new chat, the server sends a follow-on prompt to the LLM asking for a short (1-3 words) descriptive name and a single emoji for the chat.
 - The server expects the LLM to reply with a JSON object like: {"name": "...", "emoji": "..."}. If a valid response is parsed, the server updates the chat's default name to include the emoji followed by the name. This operation is best-effort and will not affect the primary user response if it fails.
 
+## Context persistence improvements (2026-02-26)
+- Enforced a sensible minimum CONTEXT_DEPTH (minimum 2) to ensure both the user's message and the assistant's reply are kept in server-side chat history.
+- Added a unit test `tests/test_context_persistence.py` that mocks `requests.post` to simulate the LLM/NPU. The test verifies:
+  - A server-side Chat object is created when no session_id is provided.
+  - The user's message and assistant reply are saved into the chat's messages list.
+  - The auto-naming follow-up prompt is issued and a valid JSON response updates the chat name.
+  - Context (previous assistant reply) is included in subsequent LLM payloads for follow-up requests.
+- All tests were executed locally: `16 passed, 1 skipped`.
+
 ## Further Notes:
 Recent debugging included crucial steps verifying empty edge payloads/SQL-Injection seen SYSTEMIC Validation/processing coordinated both testing-path fixes!
 
 ### Context/session fixes (this change)
 - /search responses now always include a session_id field. Quick-command responses (context, clear, on, off), the concurrency-guard, and the primary LLM response include session_id so clients can persist the server-side session id and maintain context across subsequent requests.
-
 
