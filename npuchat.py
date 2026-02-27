@@ -40,9 +40,9 @@ def load_config(script_dir: str) -> None:
     NPU_PORT = parser.get('npu', 'NPU_PORT')
     CONNECTION_TIMEOUT = int(parser.get('timeout', 'TIMEOUT'))
 
-    use_chat_context = parser.get('context', 'USE_CONTEXT')
+    use_chat_context = parser.getboolean('context', 'USE_CONTEXT', fallback=False)
     CONTEXT_DEPTH = int(parser.get('context', 'DEPTH'))
-    ignore_chinese = parser.get('context', 'IGNORE_CHINESE')
+    ignore_chinese = parser.getboolean('context', 'IGNORE_CHINESE', fallback=False)
 
     UI_THEME = parser.get('theme', 'THEME')
 
@@ -53,6 +53,8 @@ load_config(script_dir)
 
 # Contexts store multiple chat sessions; keys are chat ids and values are Chat objects
 contexts: Dict[str, 'Chat'] = {}
+# Backwards-compatible alias expected by tests
+CONTEXTS = contexts
 # Current in-memory context for the active request
 current_context: List[str] = []
 # Keep legacy alias (some earlier code uses 'context')
