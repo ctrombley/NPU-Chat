@@ -1,0 +1,12 @@
+{
+  "typeCheckingMode": "basic",
+  "reportMissingTypeStubs": false,
+  "exclude": [
+    "tests",
+    "venv",
+    "env",
+    "build",
+    "dist"
+  ]
+}
+
