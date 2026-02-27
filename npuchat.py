@@ -306,25 +306,25 @@ def create_app() -> Flask:
             for llm_reply in current_context:
                 context_history = f"```\n{llm_reply}\n```\n"
             answer = f"<md class='markdown-style'>{context_history}</md>"
-            return {'content': answer}
+            return {'content': answer, 'session_id': session_id}
         if question.lower() == 'clear':
             if isinstance(chat, Chat):
                 chat.messages = []
             else:
                 current_context = []
-            return {'content': "context cleared."}
+            return {'content': "context cleared.", 'session_id': session_id}
         if question.lower() == 'off':
             if isinstance(chat, Chat):
                 chat.messages = []
             current_context = []
-            return {'content': "context off."}
+            return {'content': "context off.", 'session_id': session_id}
         if question.lower() == 'on':
             use_chat_context = True
-            return {'content': "context on."}
+            return {'content': "context on.", 'session_id': session_id}
 
         # concurrency guard
         if lock.locked():
-            return {'result': "Sorry, I can only handle one request at a time and I'm currently busy."}
+            return {'result': "Sorry, I can only handle one request at a time and I'm currently busy.", 'session_id': session_id}
 
         with lock:
             answer = feed_the_llama(question)

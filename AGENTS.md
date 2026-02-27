@@ -48,4 +48,7 @@ This repository contains a web-based bot interface (`npuchat.py`) leveraging Fla
 ## Further Notes:
 Recent debugging included crucial steps verifying empty edge payloads/SQL-Injection seen SYSTEMIC Validation/processing coordinated both testing-path fixes!
 
+### Context/session fixes (this change)
+- /search responses now always include a session_id field. Quick-command responses (context, clear, on, off), the concurrency-guard, and the primary LLM response include session_id so clients can persist the server-side session id and maintain context across subsequent requests.
+
 
