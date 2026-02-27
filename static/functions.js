@@ -69,7 +69,9 @@ form.addEventListener('submit', function(event) {
         const newResponse = document.createElement('div');
         newResponse.classList.add('message', 'received');
         newResponse.setAttribute('id', randomHash);
-        newResponse.innerHTML = `<p>${data.content}</p>`; //content = json key
+        // The server returns HTML-wrapped markdown (<md>...</md>). Insert it as raw HTML
+        // instead of wrapping it in a <p> which would break the custom tag rendering.
+        newResponse.innerHTML = data.content; // content = json key
         chatMessages.appendChild(newResponse);
 
         // If server returned a session_id, migrate local chat to use it and update UI name
@@ -260,7 +262,15 @@ function switchChat(chatId) {
     chats[chatId].forEach(message => {
         const newMessage = document.createElement('div');
         newMessage.className = `message ${message.type}`;
-        newMessage.innerHTML = `<p>${message.text}</p>`;
+        // If this is a received message that already contains HTML (server-provided), insert as HTML
+        if (message.type === 'received' && /<\w+/.test(message.text)) {
+            newMessage.innerHTML = message.text;
+        } else {
+            // For plain text (sent messages or received fallback), escape and wrap in a <p>
+            const p = document.createElement('p');
+            p.textContent = message.text;
+            newMessage.appendChild(p);
+        }
         chatMessages.appendChild(newMessage);
     });
 
