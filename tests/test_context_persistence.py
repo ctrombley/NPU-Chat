@@ -84,11 +84,10 @@ def test_context_persistence_and_autoname(monkeypatch):
     data2 = rv2.get_json()
     assert data2['session_id'] == session_id
 
-    # Verify that one of the outgoing LLM payloads for this follow-up contained the prior assistant reply
-    found = False
-    for payload in call_log:
-        if payload and 'input_str' in payload and 'Assistant: Okay, this chat is about apples.' in payload['input_str']:
-            found = True
-            break
-    assert found, "Context (previous assistant reply) was not included in the follow-up LLM call"
+    # The follow-up LLM call should include the previous assistant reply in its payload.
+    # The call_log records all outgoing LLM payloads; the follow-up call is the last recorded payload.
+    assert call_log, "No LLM calls were recorded"
+    last_payload = call_log[-1]
+    assert last_payload and 'input_str' in last_payload and 'Assistant: Okay, this chat is about apples.' in last_payload['input_str'], \
+        "Context (previous assistant reply) was not included in the follow-up LLM call"
 
