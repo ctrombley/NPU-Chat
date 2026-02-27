@@ -1,12 +1,42 @@
-import pytest
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-import time
 import threading
-from npuchat import create_app, BINDING_ADDRESS, BINDING_PORT
+import time
 
-@pytest.fixture(scope='session')
+import pytest
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
+
+from config import Config
+from npuchat import create_app
+
+config = Config()
+BINDING_ADDRESS = '127.0.0.1'
+BINDING_PORT = config.BINDING_PORT
+
+
+def setup_function():
+    # Ensure a clean DB and chat files before each test
+    import glob
+    import os
+
+    # Remove DB file
+    db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'chats.db')
+    if os.path.exists(db_path):
+        try:
+            os.remove(db_path)
+        except Exception:
+            pass
+
+    # Remove all chat JSON files
+    data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+    for f in glob.glob(os.path.join(data_dir, 'chat-*.json')):
+        try:
+            os.remove(f)
+        except Exception:
+            pass
+
+@pytest.fixture(scope='session', autouse=True)
 def server():
     app = create_app()
     def run_app():
@@ -75,7 +105,11 @@ class TestFrontendChatManagement:
         input_box = driver.find_element(By.CSS_SELECTOR, "textarea[name='input_text']")
         send_button = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
 
+        input_box.click()
         input_box.send_keys("Message in first chat")
+        WebDriverWait(driver, 5).until(
+            lambda d: not d.find_element(By.CSS_SELECTOR, "button[type='submit']").get_attribute("disabled")
+        )
         send_button.click()
 
         # Wait for message to appear
@@ -89,6 +123,10 @@ class TestFrontendChatManagement:
         alert = WebDriverWait(driver, 10).until(EC.alert_is_present())
         alert.send_keys("Second Chat")
         alert.accept()
+
+        # Re-find elements after DOM update
+        input_box = driver.find_element(By.CSS_SELECTOR, "textarea[name='input_text']")
+        send_button = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
 
         # Send different message in second chat
         input_box.send_keys("Message in second chat")
@@ -143,7 +181,7 @@ class TestFrontendChatManagement:
 
         # Wait for message
         WebDriverWait(driver, 5).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "message"))
+            lambda d: "Persistent message" in d.find_element(By.CSS_SELECTOR, ".chat-messages").text
         )
 
         # Reload the page

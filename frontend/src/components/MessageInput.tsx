@@ -1,44 +1,41 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Button } from './ui/Button';
 
 interface MessageInputProps {
   currentChatId: string | null;
   onMessageSent: (text: string) => void;
+  isLoading?: boolean;
 }
 
-const MessageInput: React.FC<MessageInputProps> = ({ currentChatId, onMessageSent }) => {
+const MessageInput: React.FC<MessageInputProps> = ({
+  currentChatId,
+  onMessageSent,
+  isLoading = false
+}) => {
   const [inputText, setInputText] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim() || !currentChatId) return;
+    if (!inputText.trim() || !currentChatId || isLoading) return;
 
     const text = inputText.trim();
-    setIsLoading(true);
     setInputText('');
+    await onMessageSent(text);
+  }, [inputText, currentChatId, isLoading, onMessageSent]);
 
-    try {
-      await onMessageSent(text);
-    } catch (error) {
-      console.error('Error:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
     }
-  };
+  }, [handleSubmit]);
 
-  const autoExpand = () => {
+  const autoExpand = useCallback(() => {
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = 'auto';
@@ -46,35 +43,49 @@ const MessageInput: React.FC<MessageInputProps> = ({ currentChatId, onMessageSen
       const newHeight = Math.min(textarea.scrollHeight, maxHeight);
       textarea.style.height = newHeight + 'px';
     }
-  };
+  }, []);
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputText(e.target.value);
+    autoExpand();
+  }, [autoExpand]);
+
+  const isDisabled = !currentChatId || isLoading;
 
   return (
-    <form onSubmit={handleSubmit} className="fixed bottom-0 left-48 right-0 bg-transparent p-2.5 flex z-20 max-h-48 overflow-hidden">
+    <form onSubmit={handleSubmit} aria-label="Message form" className="fixed bottom-0 left-48 right-0 bg-transparent p-2.5 flex z-20 max-h-48 overflow-hidden">
       <div className="message-input-container flex flex-1">
+        <label htmlFor="message-input" className="sr-only">
+          Type your message
+        </label>
         <textarea
+          id="message-input"
           ref={textareaRef}
           name="input_text"
           value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          onInput={autoExpand}
+          onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          className="flex-1 p-4 box-border border border-purple-800 rounded-3xl resize-none overflow-y-hidden bg-gray-900 text-white text-base mr-2.5 max-h-40"
-          placeholder="Chat..."
+          className="flex-1 p-4 box-border border border-purple-800 rounded-3xl resize-none overflow-y-hidden bg-gray-900 text-white text-base mr-2.5 max-h-40 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+          placeholder={currentChatId ? "Chat..." : "Select a chat to start messaging"}
+          disabled={isDisabled}
+          aria-disabled={isDisabled}
         />
-        <button
+        <Button
           type="submit"
-          className="p-3 border border-purple-800 bg-gray-900 text-purple-500 rounded-3xl cursor-pointer text-2xl mr-5 hover:text-white hover:shadow-lg hover:shadow-green-400 transition-colors"
-          disabled={isLoading}
+          variant="send"
+          size="icon"
+          className="mr-5"
+          disabled={isDisabled || !inputText.trim()}
+          aria-label={isLoading ? "Sending message..." : "Send message"}
         >
           <div className={`send-icon ${isLoading ? 'hidden' : 'block'}`}>⊛</div>
           <div className={`loader ${isLoading ? 'block' : 'hidden'}`}>
             <div className="pupil"></div>
           </div>
-        </button>
+        </Button>
       </div>
     </form>
   );
 };
 
 export default MessageInput;
-

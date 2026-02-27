@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Template } from '../types';
 import TemplateListItem from './TemplateListItem';
 import * as api from '../api';
+import { Sidebar } from './ui/Sidebar';
+import { Button } from './ui/Button';
 
 interface TemplatesProps {
   onBack: () => void;
@@ -72,10 +74,7 @@ const Templates: React.FC<TemplatesProps> = ({ onBack }) => {
   }, [loadTemplates]);
 
   return (
-    <div className="w-48 h-full bg-sidebar-bg border-r border-gray-600 overflow-y-auto z-10">
-      <h3 className="m-2.5 text-white text-base border-b border-gray-600 pb-1.5">
-        Templates
-      </h3>
+    <Sidebar title="Templates">
       {isLoading && (
         <div className="text-center py-4 text-gray-400">Loading...</div>
       )}
@@ -89,23 +88,23 @@ const Templates: React.FC<TemplatesProps> = ({ onBack }) => {
           />
         ))}
       </ul>
-      <button
-        className="w-full p-2.5 m-2.5 bg-accent text-white border-none rounded cursor-pointer text-sm transition-colors hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
+      <Button
+        variant="primary"
         onClick={handleNew}
         disabled={isLoading}
         aria-label="Create new template"
       >
         New Template
-      </button>
-      <button
-        className="w-full p-2.5 m-2.5 bg-gray-600 text-white border-none rounded cursor-pointer text-sm transition-colors hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+      </Button>
+      <Button
+        variant="secondary"
         onClick={onBack}
         disabled={isLoading}
         aria-label="Back to chats"
       >
         Back to Chats
-      </button>
-    </div>
+      </Button>
+    </Sidebar>
   );
 };
 

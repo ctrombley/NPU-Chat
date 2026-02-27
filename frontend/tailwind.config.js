@@ -10,12 +10,12 @@ export default {
         'bauhaus': ['Bauhaus', 'sans-serif'],
       },
       colors: {
-        'chat-bg': '#232323',
-        'sidebar-bg': '#1a1a1a',
-        'message-sent': '#383838',
-        'message-received': '#111111',
-        'accent': '#9805b5',
-        'accent-hover': '#b025d1',
+        'chat-bg': 'rgb(var(--color-chat-bg) / <alpha-value>)',
+        'sidebar-bg': 'rgb(var(--color-sidebar-bg) / <alpha-value>)',
+        'message-sent': 'rgb(var(--color-message-sent) / <alpha-value>)',
+        'message-received': 'rgb(var(--color-message-received) / <alpha-value>)',
+        'accent': 'rgb(var(--color-accent) / <alpha-value>)',
+        'accent-hover': 'rgb(var(--color-accent-hover) / <alpha-value>)',
       },
       animation: {
         'pulse': 'pulse 1s',

@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    --color-chat-bg: 35 35 35;
+    --color-sidebar-bg: 26 26 26;
+    --color-message-sent: 56 56 56;
+    --color-message-received: 17 17 17;
+    --color-accent: 152 5 181;
+    --color-accent-hover: 176 37 209;
+  }
+}
+
 /* Custom styles for markdown rendering */
 code {
   @apply text-green-400 border-0;
