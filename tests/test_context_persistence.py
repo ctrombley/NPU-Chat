@@ -2,8 +2,8 @@ import json
 from unittest.mock import patch
 
 import pytest
-
 from conftest import JSONAPI_CONTENT_TYPE
+
 from models import Chat, db
 from npuchat import create_app
 from services import ChatService
@@ -79,7 +79,7 @@ def test_context_persistence_and_autoname(monkeypatch):
 
     # Ensure server created the chat and saved the user+assistant messages
     with app.app_context():
-        chat = Chat.query.get(session_id)
+        chat = db.session.get(Chat, session_id)
         assert chat is not None
         messages = ChatService.get_chat_messages(session_id) or []
         assert any('User: This chat is about apples.' in m for m in messages), "User message not saved"

@@ -2,21 +2,24 @@ import json
 import os
 import sqlite3
 
-from conftest import JSONAPI_CONTENT_TYPE, get_jsonapi_attrs, get_jsonapi_id, jsonapi_patch, jsonapi_post
+from conftest import (
+    JSONAPI_CONTENT_TYPE,
+    get_jsonapi_attrs,
+    get_jsonapi_id,
+    jsonapi_patch,
+    jsonapi_post,
+)
+
 from npuchat import create_app
 from services import LLMService
 
 
 def setup_function():
-    # Ensure a clean DB before each test
     db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'chats.db')
-    print(f"DEBUG: Removing DB file: {db_path}")
     if os.path.exists(db_path):
         try:
             os.remove(db_path)
-            print(f"DEBUG: Removed DB file")
-        except Exception as e:
-            print(f"DEBUG: Failed to remove DB file: {e}")
+        except Exception:
             pass
 
 
@@ -26,7 +29,7 @@ def test_auto_naming_and_persistence(monkeypatch):
 
     # Start with a clean server-side state
     with app.app_context():
-        from models import db, Chat
+        from models import Chat, db
         db.session.query(Chat).delete()
         db.session.commit()
 

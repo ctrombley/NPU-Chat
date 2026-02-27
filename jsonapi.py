@@ -1,4 +1,4 @@
-from flask import jsonify, make_response, request
+from flask import jsonify, make_response
 
 
 def serialize_resource(type_, id_, attributes):

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask_sqlalchemy import SQLAlchemy
 
@@ -13,7 +13,7 @@ class Chat(db.Model):
     template_id = db.Column(db.String(50), default='default')
     needs_naming = db.Column(db.Boolean, default=False)
     is_favorite = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     messages = db.relationship('Message', backref='chat', lazy=True, order_by='Message.position')
 
@@ -39,7 +39,6 @@ class Chat(db.Model):
         }
 
     def add_message(self, message):
-        # Add a message and trim to context depth
         from flask import current_app
         CONTEXT_DEPTH = current_app.config['CONTEXT_DEPTH']
         new_position = len(self.messages)
@@ -47,11 +46,9 @@ class Chat(db.Model):
         db.session.add(msg)
         db.session.commit()
         if len(self.messages) > CONTEXT_DEPTH:
-            # Remove oldest message
             oldest = Message.query.filter_by(chat_id=self.id).order_by(Message.position).first()
             if oldest:
                 db.session.delete(oldest)
-                # Reorder positions
                 remaining = Message.query.filter_by(chat_id=self.id).order_by(Message.position).all()
                 for i, m in enumerate(remaining):
                     m.position = i
@@ -96,4 +93,3 @@ class Template(db.Model):
             'prefix': self.prefix,
             'postfix': self.postfix
         }
-

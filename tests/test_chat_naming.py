@@ -2,6 +2,7 @@ import json
 from unittest.mock import patch
 
 from conftest import JSONAPI_CONTENT_TYPE
+
 from models import Chat, db
 from npuchat import create_app
 

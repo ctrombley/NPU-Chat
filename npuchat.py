@@ -21,13 +21,11 @@ def create_app():
 
     with app.app_context():
         db.create_all()
-        # Ensure default template exists
         TemplateService.load_templates()
 
-    # Configure Swagger/OpenAPI
     app.config['SWAGGER'] = {
         'title': 'NPU-Chat API',
-        'version': '2.0.0',
+        'version': '1.0.0',
         'description': 'JSON:API compliant chat API for NPU-Chat',
         'consumes': ['application/vnd.api+json'],
         'produces': ['application/vnd.api+json'],
@@ -44,7 +42,6 @@ def create_app():
             response.headers['Content-Type'] = 'application/vnd.api+json'
         return response
 
-    # JSON:API error handlers
     @app.errorhandler(400)
     def bad_request(e):
         return jsonapi_error_response(400, 'Bad Request', str(e))
@@ -63,13 +60,9 @@ def create_app():
     def server_error(e):
         return jsonapi_error_response(500, 'Internal Server Error')
 
-    # Routes
     @app.route('/')
     def index():
-        if os.path.exists(os.path.join(app.root_path, 'static', 'dist', 'index.html')):
-            return send_from_directory('static/dist', 'index.html')
-        else:
-            return send_from_directory('templates', 'index.html')
+        return send_from_directory('static/dist', 'index.html')
 
     @app.route('/assets/<path:filename>')
     def assets(filename):

@@ -8,6 +8,7 @@ from conftest import (
     jsonapi_patch,
     jsonapi_post,
 )
+
 from npuchat import create_app
 
 

@@ -49,6 +49,7 @@ logs
 # Data folder for chats
 data/
 
-# Frontend build output
+# Frontend
+frontend/node_modules/
 static/dist/
 

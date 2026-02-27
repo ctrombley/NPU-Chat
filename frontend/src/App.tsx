@@ -92,10 +92,11 @@ function App() {
 
     try {
       const data = await api.sendMessage(messageText, currentChatId);
-      const botMessage: Message = { type: 'received', text: data.content.replace(/<md[^>]*>|<\/md>/g, ''), timestamp: Date.now() };
+      const botMessage: Message = { type: 'received', text: data.content, timestamp: Date.now() };
       setCurrentMessages(prev => [...prev, botMessage]);
-      // Refresh chats to update metadata if needed
-      fetchChats();
+      // Refresh chat list to pick up auto-naming changes
+      const chatObjects = await api.listChats();
+      setChats(chatObjects);
     } catch (error) {
       console.error('Failed to send message:', error);
     }
