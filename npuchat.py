@@ -229,14 +229,38 @@ def load_chats_from_disk() -> None:
 
 
 def feed_the_llama(query: str) -> str:
-    """Send the user's query to the NPU server and return the text content."""
+    """Send the user's query to the NPU server and return the text content.
+
+    When using chat context, we prepend recent messages to the query. However, web_request_logic
+    appends the current user's message to the chat history before calling this function. To avoid
+    duplicating that current user message in the prepended history, drop a trailing "User: ..."
+    entry from the history if it exactly matches the current query.
+    """
     global current_context
 
     if use_chat_context:
         if current_context:
+            # Work on a copy so we don't mutate the shared in-memory list
+            history_msgs = list(current_context)
+
+            # If the last history entry is the current user's message (e.g. "User: {query}"),
+            # remove it from the prepended history because the query itself will be sent separately.
+            try:
+                if history_msgs:
+                    last = history_msgs[-1]
+                    if isinstance(last, str) and last.strip().startswith('User:'):
+                        # Extract the text after 'User:' and compare to the current query
+                        candidate = last.split(':', 1)[1].strip() if ':' in last else last.strip()
+                        if candidate == query.strip():
+                            history_msgs = history_msgs[:-1]
+            except Exception:
+                # Be conservative: if anything goes wrong, fall back to using the full history
+                history_msgs = list(current_context)
+
             llm_output_history = ""
-            for llm_reply in current_context:
+            for llm_reply in history_msgs:
                 llm_output_history = f"{llm_output_history}```\n{llm_reply}\n```\n"
+
             query = llm_output_history + query
 
     prefix = (
