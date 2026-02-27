@@ -9,7 +9,7 @@ import json
 import sqlite3
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, request, jsonify
 from requests.exceptions import Timeout
 
 # Load settings from settings.ini
@@ -341,10 +341,16 @@ def create_app() -> Flask:
 
     @app.route('/', methods=['GET', 'POST'])
     def index():
-        response = app.make_response(render_template('index.html', selected_theme=UI_THEME))
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        return response
+        # Serve the React app
+        return app.send_static_file('dist/index.html')
+
+    @app.route('/<path:path>')
+    def serve_static(path):
+        # Serve static files from the React build
+        if path.startswith('dist/') or '.' in path:
+            return app.send_static_file(path)
+        # For any other route, serve the React app (SPA routing)
+        return app.send_static_file('dist/index.html')
 
     @app.route('/chats', methods=['POST'])
     def create_chat():

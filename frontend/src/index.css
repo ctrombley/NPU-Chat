@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles for markdown rendering */
+code {
+  @apply text-green-400 border-0;
+}
+pre {
+  @apply text-white p-2 border border-gray-700 rounded-lg;
+}
+code, pre {
+  @apply bg-black;
+}
+
+a {
+  @apply text-green-400;
+}
+
+ul {
+  @apply pt-2 pr-1 m-0;
+}
+
+li {
+  @apply p-0 mb-1 mt-0 leading-none;
+}
+
+li::marker {
+  @apply text-green-400;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  @apply w-2.5 h-2.5;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-800;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-600;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-900;
+}
+
+/* Copy button animation */
+.animate {
+  animation: pulse 1s;
+  animation-fill-mode: forwards;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 10px rgba(128, 0, 128, 0.5);
+  }
+  50% {
+    transform: scale(1.1);
+    box-shadow: 0 0 20px rgba(128, 0, 128, 0.7);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 10px rgba(128, 0, 128, 0.5);
+  }
+}
+
+/* Spinning animation on send button */
+.loader {
+  width: 30px;
+  aspect-ratio: 1;
+  display: grid;
+  mask: conic-gradient(from 45deg, #0001, #000);
+  animation: load 1s steps(10) infinite;
+  --_g: linear-gradient(#9805b5 0 0) 50%;
+  background:
+    var(--_g)/34% 8% space no-repeat,
+    var(--_g)/8% 34% no-repeat space;
+  position: relative;
+  z-index: 1;
+  display: none;
+}
+
+.pupil {
+  border-radius: 50%;
+  background-color: black;
+  animation: pupilAnimation 2s infinite alternate;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+}
+
+@keyframes pupilAnimation {
+  0% {
+    width: 10px;
+    height: 8px;
+  }
+  25% {
+    width: 15px;
+    height: 13px;
+  }
+  50% {
+    width: 20px;
+    height: 18px;
+  }
+  100% {
+    width: 25px;
+    height: 23px;
+  }
+}
+
+.loader:before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, #000000 20%, #9805b5 20%);
+  transform: rotate(45deg);
+  animation: load 10s steps(10) infinite;
+  z-index: -1;
+}
+
+@keyframes load {
+  to {
+    transform: rotate(1turn);
+  }
+}
+

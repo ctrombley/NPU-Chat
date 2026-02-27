@@ -4,6 +4,13 @@
 Chat interface for LLM running on RK3588 NPU. Responsive design for desktop & mobile.  
 
 ### Recent updates:  
+#### 2026-02-27
+* **Major Refactoring**: Frontend completely rewritten using React + TypeScript + Vite + Tailwind CSS
+* Modern component-based architecture replacing vanilla JavaScript
+* Improved type safety and developer experience
+* Enhanced build tooling and development workflow
+* Maintained all existing API compatibility
+
 #### 2024-05-17
 * Added automated installer script to make installation much easier.
 
@@ -40,7 +47,7 @@ Edit `settings.ini` with your information.
 
 then navigate to the IP/port in your browser.  
 
-Works in any browser besides Firefox desktop or mobile (but maybe nightly, with the correct settings).  
+**development:**\nFor frontend development:\n```\ncd frontend\nnpm install\nnpm run dev  # Runs Vite dev server on port 5173\n```\n\nFor production build:\n```\ncd frontend\nnpm run build  # Builds to ../static/dist\ncd ..\npython3 npuchat.py  # Serves the built React app\n```\n\nWorks in any browser besides Firefox desktop or mobile (but maybe nightly, with the correct settings).
 
 **Known issues:**  
 Some models don't output valid markdown for everything. For example, if you ask Qwen `show me a list of emoji`, it will not be valid markdown.  

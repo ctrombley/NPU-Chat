@@ -86,6 +86,19 @@ Recent debugging included crucial steps verifying empty edge payloads/SQL-Inject
 - Fixed test monkeypatch to match new signature.
 - All tests pass, including new template functionality.
 
+## Frontend Refactoring to Modern Stack and Robust Test Suite (this change)
+- Migrated the React frontend from client-side localStorage-based chat management to server-side API integration.
+- Updated App.tsx to use /chats API endpoints: GET /chats for fetching chat list, POST /chats for creating new chats, PUT /chats/<id> for updating chat metadata, DELETE /chats/<id> for deleting chats.
+- Implemented chat switching by fetching messages via GET /chats/<id>/messages and setting current chat state.
+- Updated message sending to use POST /search with session_id, handling responses to update UI with bot replies.
+- Modified ChatList component to display chats from Chat[] array with name and emoji, and handle creation, switching, and deletion via API calls.
+- Updated MessageInput component to call onMessageSent callback for sending messages, removing direct fetch logic.
+- Added "chat-messages" class to ChatMessages component for easier test targeting.
+- Ensured frontend builds correctly using Vite, outputting to static/dist/ for Flask serving.
+- Updated Selenium tests in test_frontend_chat_management.py to match new React DOM structure: using XPath for "New Chat" button, CSS selectors for textarea and buttons, handling browser alerts for chat naming, and checking text content in .chat-messages for assertions.
+- Skipped localStorage persistence test as it's no longer applicable; focused on server-side persistence via page reload test.
+- The test suite provides robust coverage for frontend chat management functionality, requiring Selenium and Chrome for execution.
+
 
 
 
