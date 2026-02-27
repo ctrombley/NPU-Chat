@@ -100,8 +100,6 @@ form.addEventListener('submit', function(event) {
                 const oldElem = document.querySelector(`[data-chat-id="${currentChatId}"]`);
                 if (oldElem) {
                     oldElem.dataset.chatId = serverSid;
-                    // Also update click handler to switch to new id
-                    oldElem.querySelector('.chat-name').removeEventListener && null; // noop to avoid errors
                 }
 
                 currentChatId = serverSid;
@@ -232,7 +230,7 @@ function addChatToUI(chatId) {
     const chatName = document.createElement('span');
     chatName.className = 'chat-name';
     chatName.textContent = `Chat ${Object.keys(chats).length}`;
-    chatName.addEventListener('click', () => switchChat(chatId));
+    chatName.addEventListener('click', () => switchChat(chatElement.dataset.chatId));
 
     const deleteButton = document.createElement('button');
     deleteButton.className = 'delete-chat';

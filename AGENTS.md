@@ -3,6 +3,12 @@
 - **Version:** 0.27
 
 ## Recent Tasks and Fixes
+### Fixing Chat Switching Bug:
+1. Identified that clicking on chat names in the UI stopped working after chats get assigned server session_ids, due to event listener closure capturing old local chatId instead of reading the updated dataset.chatId.
+2. Fixed the event listener in addChatToUI to use `switchChat(chatElement.dataset.chatId)` instead of capturing chatId in closure.
+3. Removed unnecessary removeEventListener code in the migration handler that attempted to update the handler but didn't properly re-add it.
+4. Investigated why tests didn't catch it: The Selenium tests trigger migration by sending messages, but in headless mode or due to timing, the wait conditions may have passed incorrectly, or the tests are skipped in CI environments.
+
 ### Fixing Validation Issues:
 1. Enhanced test edge cases by ensuring proper handling of empty input and SQL injection.
 2. Updated test cases in `tests/test_edge_cases.py`.
