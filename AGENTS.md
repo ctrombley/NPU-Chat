@@ -75,6 +75,14 @@ Recent debugging included crucial steps verifying empty edge payloads/SQL-Inject
 ### Context/session fixes (this change)
 - /search responses now always include a session_id field. Quick-command responses (context, clear, on, off), the concurrency-guard, and the primary LLM response include session_id so clients can persist the server-side session id and maintain context across subsequent requests.
 
+## Editable Chat Metadata (this change)
+- Made chat titles and emojis editable by users through double-click on the chat items in the sidebar.
+- Backend PUT /chats/<chat_id> now accepts optional 'name' and/or 'emoji' fields to update metadata.
+- Updates are persisted immediately to the database.
+- Frontend displays emoji followed by name, with individual double-click editing for each.
+- Added comprehensive tests in `tests/test_persistence.py` for metadata updates and persistence.
+- All tests pass, and functionality verified.
+
 
 
 

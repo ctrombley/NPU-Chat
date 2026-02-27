@@ -82,3 +82,58 @@ def test_explicit_chat_creation_persists_name():
     assert row is not None
     assert row[0] == 'Persisted Chat'
 
+
+def test_update_chat_metadata():
+    app = create_app()
+    app.config['TESTING'] = True
+    client = app.test_client()
+
+    # Create a chat first
+    resp = client.post('/chats', data=json.dumps({'name': 'Original Name'}), content_type='application/json')
+    assert resp.status_code == 201
+    data = json.loads(resp.data)
+    cid = data['chat_id']
+
+    # Update name
+    resp = client.put(f'/chats/{cid}', data=json.dumps({'name': 'Updated Name'}), content_type='application/json')
+    assert resp.status_code == 200
+    data = json.loads(resp.data)
+    assert data['id'] == cid
+    assert data['name'] == 'Updated Name'
+    assert data['emoji'] == ''
+
+    # Update emoji
+    resp = client.put(f'/chats/{cid}', data=json.dumps({'emoji': '🚀'}), content_type='application/json')
+    assert resp.status_code == 200
+    data = json.loads(resp.data)
+    assert data['id'] == cid
+    assert data['name'] == 'Updated Name'
+    assert data['emoji'] == '🚀'
+
+    # Update both
+    resp = client.put(f'/chats/{cid}', data=json.dumps({'name': 'Final Name', 'emoji': '🌟'}), content_type='application/json')
+    assert resp.status_code == 200
+    data = json.loads(resp.data)
+    assert data['id'] == cid
+    assert data['name'] == 'Final Name'
+    assert data['emoji'] == '🌟'
+
+    # Verify persistence
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("SELECT name, emoji FROM chats WHERE id = ?", (cid,))
+    row = cur.fetchone()
+    conn.close()
+
+    assert row is not None
+    assert row[0] == 'Final Name'
+    assert row[1] == '🌟'
+
+    # Test no changes if no name or emoji
+    resp = client.put(f'/chats/{cid}', data=json.dumps({}), content_type='application/json')
+    assert resp.status_code == 400
+
+    # Test non-existent chat
+    resp = client.put('/chats/nonexistent', data=json.dumps({'name': 'New Name'}), content_type='application/json')
+    assert resp.status_code == 404
+

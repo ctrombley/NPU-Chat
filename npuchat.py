@@ -369,19 +369,28 @@ def create_app() -> Flask:
             return jsonify({'error': 'Chat not found'}), 404
 
         data = request.get_json()
-        if not data or 'name' not in data:
-            return jsonify({'error': 'name is required'}), 400
+        if not data:
+            return jsonify({'error': 'Request body is required'}), 400
 
-        new_name = data['name']
         chat = contexts[chat_id]
-        if isinstance(chat, Chat):
-            chat.name = new_name
-            # Persist change
-            save_chat_to_disk(chat_id)
-        else:
-            return jsonify({'error': 'Cannot update name for legacy chat format'}), 400
+        if not isinstance(chat, Chat):
+            return jsonify({'error': 'Cannot update metadata for legacy chat format'}), 400
 
-        return jsonify({'id': chat_id, 'name': new_name})
+        # Update name if provided
+        if 'name' in data:
+            chat.name = data['name']
+        # Update emoji if provided
+        if 'emoji' in data:
+            chat.emoji = data['emoji']
+
+        # At least one field must be provided
+        if 'name' not in data and 'emoji' not in data:
+            return jsonify({'error': 'At least one of name or emoji must be provided'}), 400
+
+        # Persist change
+        save_chat_to_disk(chat_id)
+
+        return jsonify({'id': chat_id, 'name': chat.name, 'emoji': chat.emoji})
 
     @app.route('/chats/<chat_id>', methods=['DELETE'])
     def delete_chat(chat_id: str):

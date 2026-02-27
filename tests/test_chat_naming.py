@@ -13,7 +13,6 @@ def test_autonaming_on_new_search_session():
     CONTEXTS.clear()
 
     # Mock feed_the_llama responses: first call is the content reply, second call is naming JSON
-    content_reply = {'content': 'This is a sample LLM response.'}
     naming_json = json.dumps({'name': 'Summary', 'emoji': '📝'})
 
     # Patch requests.post used inside feed_the_llama to return controlled responses

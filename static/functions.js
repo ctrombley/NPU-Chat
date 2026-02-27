@@ -1,3 +1,78 @@
+function saveName(input, chatId) {
+    const newName = input.value;
+    const chatElement = document.querySelector(`[data-chat-id="${chatId}"]`);
+    const nameSpan = chatElement.querySelector('.chat-name');
+    const emojiSpan = chatElement.querySelector('.chat-emoji');
+    fetch(`/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+    })
+    .then(resp => resp.json())
+    .then(data => {
+        if (data.name !== undefined) {
+            nameSpan.textContent = data.name;
+            nameSpan.addEventListener('click', () => switchChat(chatId));
+            nameSpan.addEventListener('dblclick', function() {
+                if (chatId.startsWith('chat-')) return;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = this.textContent;
+                input.style.width = '100%';
+                this.replaceWith(input);
+                input.focus();
+                input.addEventListener('blur', () => saveName(input, chatId));
+                input.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        saveName(input, chatId);
+                    }
+                });
+            });
+            input.replaceWith(nameSpan);
+        }
+    })
+    .catch(() => {
+        input.replaceWith(nameSpan);
+    });
+}
+
+function saveEmoji(input, chatId) {
+    const newEmoji = input.value;
+    const chatElement = document.querySelector(`[data-chat-id="${chatId}"]`);
+    const emojiSpan = chatElement.querySelector('.chat-emoji');
+    const nameSpan = chatElement.querySelector('.chat-name');
+    fetch(`/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emoji: newEmoji })
+    })
+    .then(resp => resp.json())
+    .then(data => {
+        if (data.emoji !== undefined) {
+            emojiSpan.textContent = data.emoji;
+            emojiSpan.addEventListener('dblclick', function() {
+                if (chatId.startsWith('chat-')) return;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = this.textContent;
+                input.style.maxWidth = '20px';
+                this.replaceWith(input);
+                input.focus();
+                input.addEventListener('blur', () => saveEmoji(input, chatId));
+                input.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        saveEmoji(input, chatId);
+                    }
+                });
+            });
+            input.replaceWith(emojiSpan);
+        }
+    })
+    .catch(() => {
+        input.replaceWith(emojiSpan);
+    });
+}
+
 /*
 MIT License
 
@@ -117,6 +192,10 @@ form.addEventListener('submit', function(event) {
                             const nameSpan = elem.querySelector('.chat-name');
                             if (nameSpan) {
                                 nameSpan.textContent = serverChat.name || nameSpan.textContent;
+                                const emojiSpan = elem.querySelector('.chat-emoji');
+                                if (emojiSpan) {
+                                    emojiSpan.textContent = serverChat.emoji || '';
+                                }
                             }
                         }
                     }
@@ -227,10 +306,49 @@ function addChatToUI(chatId) {
     chatElement.className = 'chat-item';
     chatElement.dataset.chatId = chatId;
 
+    const emojiSpan = document.createElement('span');
+    emojiSpan.className = 'chat-emoji';
+    emojiSpan.textContent = '';
+
     const chatName = document.createElement('span');
     chatName.className = 'chat-name';
     chatName.textContent = `Chat ${Object.keys(chats).length}`;
     chatName.addEventListener('click', () => switchChat(chatElement.dataset.chatId));
+
+    // Make name editable on double-click
+    chatName.addEventListener('dblclick', function() {
+        if (chatId.startsWith('chat-')) return; // Only allow editing for server chats
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = this.textContent;
+        input.style.width = '100%';
+        this.replaceWith(input);
+        input.focus();
+        input.addEventListener('blur', () => saveName(input, chatId));
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                saveName(input, chatId);
+            }
+        });
+    });
+
+    // Make emoji editable on double-click
+    emojiSpan.addEventListener('dblclick', function() {
+        if (chatId.startsWith('chat-')) return; // Only allow editing for server chats
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = this.textContent;
+        input.style.maxWidth = '20px';
+        this.replaceWith(input);
+        input.focus();
+        input.focus();
+        input.addEventListener('blur', () => saveEmoji(input, chatId));
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                saveEmoji(input, chatId);
+            }
+        });
+    });
 
     const deleteButton = document.createElement('button');
     deleteButton.className = 'delete-chat';
@@ -241,6 +359,7 @@ function addChatToUI(chatId) {
         deleteChat(chatId);
     });
 
+    chatElement.appendChild(emojiSpan);
     chatElement.appendChild(chatName);
     chatElement.appendChild(deleteButton);
     chatList.appendChild(chatElement);
