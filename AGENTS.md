@@ -1,5 +1,3 @@
-# AGENTS.md
-
 ## Project Information
 - **Project Name:** NPU Chat
 - **Version:** 0.27
@@ -54,9 +52,23 @@ This repository contains a web-based bot interface (`npuchat.py`) leveraging Fla
   - Context (previous assistant reply) is included in subsequent LLM payloads for follow-up requests.
 - All tests were executed locally: `16 passed, 1 skipped`.
 
+## Persistence of Chat Metadata (this change)
+- Persisted chat metadata (name and emoji) alongside messages to disk under the `data/` directory. Each chat is stored as a JSON document named `<chat_id>.json`.
+- When a chat is auto-created by a `/search` request, the server marks it `needs_naming=True`, persists the initial metadata, and after obtaining a naming suggestion from the LLM it writes the finalized `name` and `emoji` into the same JSON file.
+- Explicitly created chats via POST /chats also persist the provided name immediately.
+- On application startup the server loads all JSON chat files from the `data/` directory into memory so chat metadata and messages survive restarts.
+
+## Tests added
+- `tests/test_persistence.py` verifies:
+  - An implicit `/search` request that triggers auto-naming results in a persisted JSON document that contains the final name and emoji.
+  - Explicit chat creation persists the provided name to disk and is reloaded on application startup.
+
 ## Further Notes:
 Recent debugging included crucial steps verifying empty edge payloads/SQL-Injection seen SYSTEMIC Validation/processing coordinated both testing-path fixes!
 
 ### Context/session fixes (this change)
 - /search responses now always include a session_id field. Quick-command responses (context, clear, on, off), the concurrency-guard, and the primary LLM response include session_id so clients can persist the server-side session id and maintain context across subsequent requests.
+
+
+
 

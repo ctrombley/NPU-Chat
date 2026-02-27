@@ -6,6 +6,7 @@ import threading
 import time
 import logging
 import json
+import sqlite3
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
 from flask import Flask, render_template, request, jsonify
@@ -22,7 +23,7 @@ def load_config(script_dir: str) -> None:
 
     config_path = f"{script_dir}settings.ini"
     parser = configparser.ConfigParser()
-    _ = parser.read(config_path)  # result is a list[str]; assign to '_' to indicate intentional discard
+    _ = parser.read(config_path)
 
     global BINDING_ADDRESS
     global BINDING_PORT
@@ -41,7 +42,6 @@ def load_config(script_dir: str) -> None:
     CONNECTION_TIMEOUT = int(parser.get('timeout', 'TIMEOUT'))
 
     use_chat_context = parser.getboolean('context', 'USE_CONTEXT', fallback=False)
-    # Ensure a sensible minimum context depth so both the user's message and the assistant's reply can be kept
     raw_context_depth = int(parser.get('context', 'DEPTH'))
     CONTEXT_DEPTH = max(2, raw_context_depth)
     if raw_context_depth < 2:
@@ -55,6 +55,13 @@ def load_config(script_dir: str) -> None:
 # Load configuration
 script_dir = os.path.dirname(os.path.abspath(__file__))
 load_config(script_dir)
+
+# Directory for persisting chat metadata + messages
+DATA_DIR = os.path.join(script_dir, 'data')
+os.makedirs(DATA_DIR, exist_ok=True)
+
+# SQLite DB path
+DB_PATH = os.path.join(DATA_DIR, 'chats.db')
 
 # Contexts store multiple chat sessions; keys are chat ids and values are Chat objects
 contexts: Dict[str, 'Chat'] = {}
@@ -76,14 +83,17 @@ class Chat:
     """Represents a chat session with metadata and messages"""
     id: str
     name: str
+    emoji: str = ''
     needs_naming: bool = False
     messages: List[str] = field(default_factory=list)
     created_at: int = field(default_factory=lambda: int(time.time() * 1000))
 
     def to_dict(self) -> Dict[str, Any]:
+        display_name = f"{self.emoji} {self.name}".strip() if self.emoji else self.name
         return {
             'id': self.id,
-            'name': self.name,
+            'name': display_name,
+            'emoji': self.emoji,
             'message_count': len(self.messages),
             'created_at': self.created_at
         }
@@ -104,9 +114,122 @@ def contains_chinese(text: str) -> bool:
     return bool(re.search(pattern, text))
 
 
+# --- SQLite helpers -----------------------------------------------------
+
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    """Initialize the SQLite database and required tables."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS chats (
+                id TEXT PRIMARY KEY,
+                name TEXT,
+                emoji TEXT,
+                needs_naming INTEGER,
+                created_at INTEGER
+            )
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id TEXT,
+                content TEXT,
+                position INTEGER,
+                FOREIGN KEY(chat_id) REFERENCES chats(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def save_chat_to_disk(chat_id: str) -> None:
+    """Persist a chat (metadata + messages) to SQLite database."""
+    if chat_id not in contexts:
+        return
+    chat = contexts[chat_id]
+    try:
+        init_db()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        if isinstance(chat, Chat):
+            cur.execute(
+                "INSERT OR REPLACE INTO chats (id, name, emoji, needs_naming, created_at) VALUES (?, ?, ?, ?, ?)",
+                (chat.id, chat.name, chat.emoji, 1 if chat.needs_naming else 0, chat.created_at)
+            )
+            # Replace messages: delete existing and insert current list
+            cur.execute("DELETE FROM messages WHERE chat_id = ?", (chat.id,))
+            for idx, msg in enumerate(chat.messages):
+                cur.execute(
+                    "INSERT INTO messages (chat_id, content, position) VALUES (?, ?, ?)",
+                    (chat.id, msg, idx)
+                )
+        else:
+            # legacy format: chat is a list of messages
+            cur.execute(
+                "INSERT OR REPLACE INTO chats (id, name, emoji, needs_naming, created_at) VALUES (?, ?, ?, ?, ?)",
+                (chat_id, f'Chat {chat_id}', '', 0, int(time.time() * 1000))
+            )
+            cur.execute("DELETE FROM messages WHERE chat_id = ?", (chat_id,))
+            for idx, msg in enumerate(chat):
+                cur.execute(
+                    "INSERT INTO messages (chat_id, content, position) VALUES (?, ?, ?)",
+                    (chat_id, msg, idx)
+                )
+        conn.commit()
+    except Exception:
+        logging.exception(f"Failed to save chat {chat_id} to SQLite")
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def load_chats_from_disk() -> None:
+    """Load any persisted chats from SQLite into the in-memory contexts dict."""
+    try:
+        init_db()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT id, name, emoji, needs_naming, created_at FROM chats")
+        rows = cur.fetchall()
+        for row in rows:
+            chat_id = row['id']
+            name = row['name'] or f'Chat {len(contexts) + 1}'
+            emoji = row['emoji'] or ''
+            needs_naming = bool(row['needs_naming'])
+            created_at = row['created_at'] or int(time.time() * 1000)
+
+            # Load messages
+            cur.execute("SELECT content FROM messages WHERE chat_id = ? ORDER BY position", (chat_id,))
+            msg_rows = cur.fetchall()
+            messages = [r['content'] for r in msg_rows]
+
+            chat = Chat(chat_id, name, emoji=emoji, needs_naming=needs_naming, messages=messages, created_at=created_at)
+            contexts[chat_id] = chat
+    except Exception:
+        logging.exception("Failed to load chats from SQLite")
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 def feed_the_llama(query: str) -> str:
     """Send the user's query to the NPU server and return the text content."""
-    # If context usage is enabled, prepend the recent context
     global current_context
 
     if use_chat_context:
@@ -160,6 +283,9 @@ def create_app() -> Flask:
     print(f"Starting server at: http://{BINDING_ADDRESS}:{BINDING_PORT}")
     app = Flask(__name__)
 
+    # Load persisted chats into memory at app startup
+    load_chats_from_disk()
+
     @app.route('/', methods=['GET', 'POST'])
     def index():
         response = app.make_response(render_template('index.html', selected_theme=UI_THEME))
@@ -181,9 +307,11 @@ def create_app() -> Flask:
         chat_id_counter += 1
         chat_id = f"chat-{chat_id_counter}"
 
-        # User-created chats should not trigger auto-naming
         chat = Chat(chat_id, chat_name, needs_naming=False)
         contexts[chat_id] = chat
+
+        # Persist to DB
+        save_chat_to_disk(chat_id)
 
         return jsonify({
             'chat_id': chat_id,
@@ -204,6 +332,7 @@ def create_app() -> Flask:
                 chats.append({
                     'id': chat_id,
                     'name': chat_name,
+                    'emoji': '',
                     'message_count': len(chat),
                     'created_at': created_at
                 })
@@ -223,6 +352,8 @@ def create_app() -> Flask:
         chat = contexts[chat_id]
         if isinstance(chat, Chat):
             chat.name = new_name
+            # Persist change
+            save_chat_to_disk(chat_id)
         else:
             return jsonify({'error': 'Cannot update name for legacy chat format'}), 400
 
@@ -234,6 +365,23 @@ def create_app() -> Flask:
         if chat_id not in contexts:
             return jsonify({'error': 'Chat not found'}), 404
         del contexts[chat_id]
+
+        # Remove persisted DB rows if present
+        try:
+            init_db()
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("DELETE FROM messages WHERE chat_id = ?", (chat_id,))
+            cur.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
+            conn.commit()
+        except Exception:
+            logging.exception(f"Failed to delete chat {chat_id} from SQLite")
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
         return jsonify({'message': f'Chat {chat_id} deleted'}), 200
 
     @app.route('/chats/<chat_id>/switch', methods=['POST'])
@@ -289,10 +437,11 @@ def create_app() -> Flask:
         # If no session_id or session doesn't exist, create a new server-side chat
         if not session_id or session_id not in contexts:
             new_session_id = f"chat-{int(time.time() * 1000)}"
-            # Create a Chat object and mark it for auto-naming
             friendly_default_name = f"Chat {len(contexts) + 1}"
             chat = Chat(new_session_id, friendly_default_name, needs_naming=True)
             contexts[new_session_id] = chat
+            # Persist initial chat metadata
+            save_chat_to_disk(new_session_id)
             session_id = new_session_id
 
         # set the module-level current_context to point at this chat's messages list
@@ -316,7 +465,6 @@ def create_app() -> Flask:
             return out
 
         if cmd == 'context':
-            # Ensure current_context reflects the chat's messages list
             if isinstance(chat, Chat):
                 current_context = chat.messages
             else:
@@ -330,8 +478,8 @@ def create_app() -> Flask:
             if isinstance(chat, Chat):
                 chat.messages = []
                 current_context = chat.messages
+                save_chat_to_disk(session_id)
             else:
-                # mutate the existing list referenced by current_context
                 if isinstance(current_context, list):
                     current_context.clear()
                 else:
@@ -343,6 +491,7 @@ def create_app() -> Flask:
             if isinstance(chat, Chat):
                 chat.messages = []
                 current_context = chat.messages
+                save_chat_to_disk(session_id)
             else:
                 if isinstance(current_context, list):
                     current_context.clear()
@@ -354,18 +503,15 @@ def create_app() -> Flask:
             use_chat_context = True
             return {'content': "context on.", 'session_id': session_id}
 
-        # Debugging commands
-        # "sessions" - list all session ids and basic metadata
         if cmd == 'sessions':
             sessions = []
             for sid, s in contexts.items():
                 if isinstance(s, Chat):
-                    sessions.append({'id': sid, 'name': s.name, 'messages': len(s.messages)})
+                    sessions.append({'id': sid, 'name': s.name, 'emoji': s.emoji, 'messages': len(s.messages)})
                 else:
-                    sessions.append({'id': sid, 'name': str(sid), 'messages': len(s)})
+                    sessions.append({'id': sid, 'name': str(sid), 'emoji': '', 'messages': len(s)})
             return {'content': json.dumps({'sessions': sessions}, indent=2), 'session_id': session_id}
 
-        # "dump <chat_id>" - return messages for a given chat
         if cmd.startswith('dump '):
             parts = cmd.split(maxsplit=1)
             if len(parts) == 2:
@@ -377,7 +523,6 @@ def create_app() -> Flask:
                 else:
                     return {'content': f'chat {dump_id} not found', 'session_id': session_id}
 
-        # "show_config" - display key config values useful for debugging
         if cmd == 'show_config':
             cfg = {
                 'BINDING_ADDRESS': BINDING_ADDRESS,
@@ -392,7 +537,6 @@ def create_app() -> Flask:
             }
             return {'content': json.dumps(cfg, indent=2), 'session_id': session_id}
 
-        # "help" - list available quick/debug commands
         if cmd == 'help':
             help_text = (
                 "Available quick commands:\n"
@@ -406,35 +550,31 @@ def create_app() -> Flask:
             )
             return {'content': help_text, 'session_id': session_id}
 
-        # concurrency guard
         if lock.locked():
             return {'result': "Sorry, I can only handle one request at a time and I'm currently busy.", 'session_id': session_id}
 
         with lock:
-            # Save the user's message into the chat history so subsequent LLM calls see full context
             if isinstance(chat, Chat):
                 chat.add_message(f"User: {question}")
+                save_chat_to_disk(session_id)
             else:
                 current_context.append(f"User: {question}")
 
             raw_answer = feed_the_llama(question)
 
-        # Update chat context
         ignore_chinese_chars = False
         if ignore_chinese:
             ignore_chinese_chars = contains_chinese(raw_answer)
 
         if not ignore_chinese_chars:
-            # Save the assistant reply prefixed so context clearly indicates the speaker
             if isinstance(chat, Chat):
                 chat.add_message(f"Assistant: {raw_answer}")
+                save_chat_to_disk(session_id)
             else:
                 current_context.append(f"Assistant: {raw_answer}")
 
-        # After producing a response for a newly created chat, request a short name + emoji
         try:
             if isinstance(chat, Chat) and chat.needs_naming:
-                # Ask the LLM to propose a concise title and single emoji for the chat
                 naming_prompt = (
                     "Please provide a very short (1-3 words) descriptive name for the conversation we just had, "
                     "and a single emoji that summarizes it. Respond ONLY with a JSON object like: {\"name\": \"...\", \"emoji\": \"...\"}."
@@ -443,12 +583,10 @@ def create_app() -> Flask:
                 with lock:
                     naming_response = feed_the_llama(naming_prompt)
 
-                # Try to parse JSON
                 parsed: Optional[Dict[str, Any]] = None
                 try:
                     parsed = json.loads(naming_response)
                 except Exception:
-                    # If the response itself was wrapped (e.g. quoted JSON), try to extract a JSON substring
                     m = re.search(r"(\{.*\})", naming_response, re.DOTALL)
                     if m:
                         try:
@@ -460,18 +598,13 @@ def create_app() -> Flask:
                     name = parsed.get('name', '').strip()
                     emoji = parsed.get('emoji', '').strip()
                     if name:
-                        # Prepend emoji if present
-                        if emoji:
-                            chat.name = f"{emoji} {name}"
-                        else:
-                            chat.name = name
-                    # Once named, don't ask again
+                        chat.name = name
+                        chat.emoji = emoji
                     chat.needs_naming = False
+                    save_chat_to_disk(session_id)
         except Exception:
-            # Naming is best-effort — if anything fails, don't block the primary response
             pass
 
-        # Wrap the LLM answer in markdown tag for client
         answer = f"<md class='markdown-style'>{raw_answer}</md>"
 
         end_time = time.time()
@@ -486,6 +619,7 @@ def web_server() -> None:
     print(f"Starting server at: http://{BINDING_ADDRESS}:{BINDING_PORT}")
     app = create_app()
     app.run(host=BINDING_ADDRESS, port=BINDING_PORT, debug=True)
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(message)s')
