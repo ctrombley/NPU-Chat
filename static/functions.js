@@ -60,7 +60,12 @@ form.addEventListener('submit', function(event) {
     // Generate a random hash
     const randomHash = Math.random().toString(36).substring(2, 34);
 
-    fetch('/search', {
+    let url = '/search';
+    if (currentChatId && currentChatId.startsWith('chat-')) {
+        url += `?session_id=${encodeURIComponent(currentChatId)}`;
+    }
+
+    fetch(url, {
         method: 'POST',
         body: new FormData(form)
     })
