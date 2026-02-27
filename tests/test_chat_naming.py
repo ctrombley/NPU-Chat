@@ -1,19 +1,24 @@
 import json
 from unittest.mock import patch
-from npuchat import create_app, CONTEXTS
+
+from conftest import JSONAPI_CONTENT_TYPE
+from models import Chat, db
+from npuchat import create_app
 
 
 def test_autonaming_on_new_search_session():
-    """Verify that POSTing to /search without session_id creates a new Chat and attempts to auto-name it."""
+    """Verify that POSTing to /api/search without session_id creates a new Chat and attempts to auto-name it."""
     app = create_app()
     app.config['TESTING'] = True
     client = app.test_client()
 
     # Ensure clean state
-    CONTEXTS.clear()
+    with app.app_context():
+        db.session.query(Chat).delete()
+        db.session.commit()
 
     # Mock feed_the_llama responses: first call is the content reply, second call is naming JSON
-    naming_json = json.dumps({'name': 'Summary', 'emoji': '📝'})
+    naming_json = json.dumps({'name': 'Summary', 'emoji': '\U0001f4dd'})
 
     # Patch requests.post used inside feed_the_llama to return controlled responses
     class MockResp:
@@ -37,16 +42,22 @@ def test_autonaming_on_new_search_session():
             return MockResp({'content': 'LLM normal reply'})
 
     with patch('requests.post', side_effect=side_effect_post):
-        response = client.post('/search', data={'input_text': 'Hello'})
+        response = client.post(
+            '/api/search',
+            data=json.dumps({'data': {'type': 'search-requests', 'attributes': {'input_text': 'Hello'}}}),
+            content_type=JSONAPI_CONTENT_TYPE,
+        )
 
     assert response.status_code == 200
-    data = json.loads(response.data)
-    assert 'content' in data
+    body = json.loads(response.data)
+    assert 'data' in body
+    assert body['data']['attributes']['content']
 
     # There should be exactly one chat created
-    assert len(CONTEXTS) == 1
-    chat = next(iter(CONTEXTS.values()))
-    # The chat should have been renamed to include the emoji and name from naming_json
-    assert chat.name.startswith('📝') or 'Summary' in chat.name
-    assert chat.needs_naming is False
-
+    with app.app_context():
+        chats = Chat.query.all()
+        assert len(chats) == 1
+        chat = chats[0]
+        # The chat should have been renamed to include the emoji and name from naming_json
+        assert chat.name.startswith('\U0001f4dd') or 'Summary' in chat.name
+        assert chat.needs_naming is False

@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Template } from '../types';
+import TemplateListItem from './TemplateListItem';
+import * as api from '../api';
 
 interface TemplatesProps {
   onBack: () => void;
@@ -7,22 +9,25 @@ interface TemplatesProps {
 
 const Templates: React.FC<TemplatesProps> = ({ onBack }) => {
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     loadTemplates();
   }, []);
 
-  const loadTemplates = async () => {
+  const loadTemplates = useCallback(async () => {
     try {
-      const response = await fetch('/templates');
-      const data = await response.json();
+      setIsLoading(true);
+      const data = await api.listTemplates();
       setTemplates(data);
     } catch (error) {
       console.error('Error loading templates:', error);
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, []);
 
-  const handleEdit = async (templateId: string) => {
+  const handleEdit = useCallback(async (templateId: string) => {
     const template = templates.find(t => t.id === templateId);
     if (!template) return;
 
@@ -32,83 +37,71 @@ const Templates: React.FC<TemplatesProps> = ({ onBack }) => {
 
     if (newName && newPrefix !== null && newPostfix !== null) {
       try {
-        await fetch(`/templates/${templateId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: newName, prefix: newPrefix, postfix: newPostfix }),
-        });
-        loadTemplates();
+        await api.updateTemplate(templateId, { name: newName, prefix: newPrefix!, postfix: newPostfix! });
+        await loadTemplates();
       } catch (error) {
         console.error('Error updating template:', error);
       }
     }
-  };
+  }, [templates, loadTemplates]);
 
-  const handleDelete = async (templateId: string) => {
-    if (confirm('Delete this template?')) {
-      try {
-        await fetch(`/templates/${templateId}`, { method: 'DELETE' });
-        loadTemplates();
-      } catch (error) {
-        console.error('Error deleting template:', error);
-      }
+  const handleDelete = useCallback(async (templateId: string) => {
+    if (!confirm('Delete this template?')) return;
+
+    try {
+      await api.deleteTemplate(templateId);
+      await loadTemplates();
+    } catch (error) {
+      console.error('Error deleting template:', error);
     }
-  };
+  }, [loadTemplates]);
 
-  const handleNew = () => {
+  const handleNew = useCallback(async () => {
     const name = prompt('Enter template name:');
     const prefix = prompt('Enter prefix:');
     const postfix = prompt('Enter postfix:');
 
     if (name && prefix !== null && postfix !== null) {
-      fetch('/templates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, prefix, postfix }),
-      })
-        .then(() => loadTemplates())
-        .catch(error => console.error('Error creating template:', error));
+      try {
+        await api.createTemplate(name, prefix!, postfix!);
+        await loadTemplates();
+      } catch (error) {
+        console.error('Error creating template:', error);
+      }
     }
-  };
+  }, [loadTemplates]);
 
   return (
     <div className="w-48 h-full bg-sidebar-bg border-r border-gray-600 overflow-y-auto z-10">
       <h3 className="m-2.5 text-white text-base border-b border-gray-600 pb-1.5">
         Templates
       </h3>
+      {isLoading && (
+        <div className="text-center py-4 text-gray-400">Loading...</div>
+      )}
       <ul className="list-none p-0 m-0">
         {templates.map((template) => (
-          <li
+          <TemplateListItem
             key={template.id}
-            className="flex justify-between items-center p-2.5 cursor-pointer border-b border-gray-600 transition-colors hover:bg-gray-700"
-          >
-            <span className="text-sm">{template.name}</span>
-            <div>
-              <button
-                className="mr-1 bg-gray-600 text-white border-none rounded px-1 py-0.5 cursor-pointer text-xs"
-                onClick={() => handleEdit(template.id)}
-              >
-                Edit
-              </button>
-              <button
-                className="bg-none border-none text-gray-500 cursor-pointer px-1 py-0.5 rounded transition-colors hover:text-red-400 hover:bg-gray-600"
-                onClick={() => handleDelete(template.id)}
-              >
-                ×
-              </button>
-            </div>
-          </li>
+            template={template}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
         ))}
       </ul>
       <button
-        className="w-full p-2.5 m-2.5 bg-accent text-white border-none rounded cursor-pointer text-sm transition-colors hover:bg-accent-hover"
+        className="w-full p-2.5 m-2.5 bg-accent text-white border-none rounded cursor-pointer text-sm transition-colors hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={handleNew}
+        disabled={isLoading}
+        aria-label="Create new template"
       >
         New Template
       </button>
       <button
-        className="w-full p-2.5 m-2.5 bg-gray-600 text-white border-none rounded cursor-pointer text-sm transition-colors hover:bg-gray-700"
+        className="w-full p-2.5 m-2.5 bg-gray-600 text-white border-none rounded cursor-pointer text-sm transition-colors hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={onBack}
+        disabled={isLoading}
+        aria-label="Back to chats"
       >
         Back to Chats
       </button>
@@ -117,4 +110,3 @@ const Templates: React.FC<TemplatesProps> = ({ onBack }) => {
 };
 
 export default Templates;
-

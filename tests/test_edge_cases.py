@@ -1,30 +1,38 @@
-import requests
-from unittest.mock import patch
+import json
 
-# Define the Flask server URL and the search endpoint
-URL = "http://192.168.50.20:8088/search"
+from conftest import JSONAPI_CONTENT_TYPE
+from npuchat import create_app
+
 
 def test_empty_input():
-    """ Test for empty input """
-    empty_payload = {"input_text": ""}
-    with patch("requests.post") as mock_post:
-        mock_post.return_value.status_code = 400
-        mock_post.return_value.json.return_value = {"content": "Empty input is not allowed."}
+    """Test for empty input"""
+    app = create_app()
+    app.config['TESTING'] = True
+    client = app.test_client()
 
-        response = requests.post(URL, data=empty_payload)
-        assert response.status_code == 400, f"Expected 400 for empty input, got {response.status_code}"
-        assert "Empty input is not allowed." in response.json().get('content', ""), "Empty input did not return proper error message."
-    print("Test Passed: Empty input handled correctly.")
+    response = client.post(
+        '/api/search',
+        data=json.dumps({'data': {'type': 'search-requests', 'attributes': {'input_text': ''}}}),
+        content_type=JSONAPI_CONTENT_TYPE,
+    )
+    assert response.status_code == 400
+    body = json.loads(response.data)
+    assert 'errors' in body
+    assert 'empty input' in body['errors'][0]['detail'].lower()
+
 
 def test_special_characters():
-    """ Test for Special characters (SQL Injection) """
-    sql_injection_payload = {"input_text": "'; DROP TABLE users; --"}
-    with patch("requests.post") as mock_post:
-        mock_post.return_value.status_code = 400
-        mock_post.return_value.json.return_value = {"content": "Invalid input detected."}
+    """Test for special characters (SQL Injection)"""
+    app = create_app()
+    app.config['TESTING'] = True
+    client = app.test_client()
 
-        response = requests.post(URL, data=sql_injection_payload)
-        assert response.status_code == 400, f"Expected 400 for SQL injection payload, got {response.status_code}"
-        assert "Invalid input detected." in response.json().get('content', ""), "SQL injection payload did not return proper error message."
-    print("Test Passed: SQL injection handled correctly.")
-
+    response = client.post(
+        '/api/search',
+        data=json.dumps({'data': {'type': 'search-requests', 'attributes': {'input_text': "'; DROP TABLE users; --"}}}),
+        content_type=JSONAPI_CONTENT_TYPE,
+    )
+    assert response.status_code == 400
+    body = json.loads(response.data)
+    assert 'errors' in body
+    assert 'invalid input' in body['errors'][0]['detail'].lower()

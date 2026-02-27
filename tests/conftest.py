@@ -1,6 +1,8 @@
-import pytest
-import sys
+import json
 import os
+import sys
+
+import pytest
 
 # Ensure project root is on sys.path so tests can import npuchat
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -48,3 +50,41 @@ def client():
     with app.test_client() as client:
         yield client
 
+
+# --- JSON:API test helpers ---
+
+JSONAPI_CONTENT_TYPE = 'application/vnd.api+json'
+
+def jsonapi_post(client, url, type_, attrs):
+    """POST a JSON:API resource and return the response."""
+    return client.post(
+        url,
+        data=json.dumps({'data': {'type': type_, 'attributes': attrs}}),
+        content_type=JSONAPI_CONTENT_TYPE,
+    )
+
+def jsonapi_patch(client, url, type_, id_, attrs):
+    """PATCH a JSON:API resource and return the response."""
+    return client.patch(
+        url,
+        data=json.dumps({'data': {'type': type_, 'id': id_, 'attributes': attrs}}),
+        content_type=JSONAPI_CONTENT_TYPE,
+    )
+
+def get_jsonapi_data(response):
+    """Parse JSON:API response and return the 'data' field."""
+    return json.loads(response.data)['data']
+
+def get_jsonapi_attrs(response):
+    """Parse a single-resource JSON:API response and return its attributes."""
+    data = get_jsonapi_data(response)
+    if isinstance(data, list):
+        return data[0]['attributes']
+    return data['attributes']
+
+def get_jsonapi_id(response):
+    """Parse a single-resource JSON:API response and return its id."""
+    data = get_jsonapi_data(response)
+    if isinstance(data, list):
+        return data[0]['id']
+    return data['id']

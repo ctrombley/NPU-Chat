@@ -1,31 +1,41 @@
 import json
 import os
 import sqlite3
-from npuchat import create_app, DB_PATH, contexts
+
+from conftest import JSONAPI_CONTENT_TYPE, get_jsonapi_attrs, get_jsonapi_id, jsonapi_patch, jsonapi_post
+from npuchat import create_app
+from services import LLMService
 
 
 def setup_function():
     # Ensure a clean DB before each test
-    if os.path.exists(DB_PATH):
+    db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'chats.db')
+    print(f"DEBUG: Removing DB file: {db_path}")
+    if os.path.exists(db_path):
         try:
-            os.remove(DB_PATH)
-        except Exception:
+            os.remove(db_path)
+            print(f"DEBUG: Removed DB file")
+        except Exception as e:
+            print(f"DEBUG: Failed to remove DB file: {e}")
             pass
-
-
-def teardown_function():
-    contexts.clear()
 
 
 def test_auto_naming_and_persistence(monkeypatch):
     app = create_app()
     app.config['TESTING'] = True
+
+    # Start with a clean server-side state
+    with app.app_context():
+        from models import db, Chat
+        db.session.query(Chat).delete()
+        db.session.commit()
+
     client = app.test_client()
 
     # Monkeypatch feed_the_llama to return predictable assistant response and naming JSON
     responses = [
         "This is the assistant reply.",
-        json.dumps({"name": "Quick Help", "emoji": "⚡"})
+        json.dumps({"name": "Quick Help", "emoji": "\u26a1"})
     ]
 
     def fake_feed(query, prefix, postfix):
@@ -33,16 +43,20 @@ def test_auto_naming_and_persistence(monkeypatch):
             return responses.pop(0)
         return ""
 
-    monkeypatch.setattr('npuchat.feed_the_llama', fake_feed)
+    monkeypatch.setattr('services.LLMService.feed_the_llama', fake_feed)
 
-    resp = client.post('/search', data={'input_text': 'Hello world'})
+    resp = client.post(
+        '/api/search',
+        data=json.dumps({'data': {'type': 'search-requests', 'attributes': {'input_text': 'Hello world'}}}),
+        content_type=JSONAPI_CONTENT_TYPE,
+    )
     assert resp.status_code == 200
-    data = json.loads(resp.data)
-    assert 'session_id' in data
-    session_id = data['session_id']
+    body = json.loads(resp.data)
+    session_id = body['data']['attributes']['session_id']
 
     # Verify data in SQLite
-    conn = sqlite3.connect(DB_PATH)
+    db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'chats.db')
+    conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     cur.execute("SELECT name, emoji FROM chats WHERE id = ?", (session_id,))
     row = cur.fetchone()
@@ -50,10 +64,10 @@ def test_auto_naming_and_persistence(monkeypatch):
 
     assert row is not None
     assert row[0] == 'Quick Help'
-    assert row[1] == '⚡'
+    assert row[1] == '\u26a1'
 
     # Check messages exist
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     cur.execute("SELECT content FROM messages WHERE chat_id = ? ORDER BY position", (session_id,))
     msgs = [r[0] for r in cur.fetchall()]
@@ -68,12 +82,12 @@ def test_explicit_chat_creation_persists_name():
     app.config['TESTING'] = True
     client = app.test_client()
 
-    resp = client.post('/chats', data=json.dumps({'name': 'Persisted Chat'}), content_type='application/json')
+    resp = jsonapi_post(client, '/api/chats', 'chats', {'name': 'Persisted Chat'})
     assert resp.status_code == 201
-    data = json.loads(resp.data)
-    cid = data['chat_id']
+    cid = get_jsonapi_id(resp)
 
-    conn = sqlite3.connect(DB_PATH)
+    db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'chats.db')
+    conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     cur.execute("SELECT name FROM chats WHERE id = ?", (cid,))
     row = cur.fetchone()
@@ -89,37 +103,37 @@ def test_update_chat_metadata():
     client = app.test_client()
 
     # Create a chat first
-    resp = client.post('/chats', data=json.dumps({'name': 'Original Name'}), content_type='application/json')
+    resp = jsonapi_post(client, '/api/chats', 'chats', {'name': 'Original Name'})
     assert resp.status_code == 201
-    data = json.loads(resp.data)
-    cid = data['chat_id']
+    cid = get_jsonapi_id(resp)
 
     # Update name
-    resp = client.put(f'/chats/{cid}', data=json.dumps({'name': 'Updated Name'}), content_type='application/json')
+    resp = jsonapi_patch(client, f'/api/chats/{cid}', 'chats', cid, {'name': 'Updated Name'})
     assert resp.status_code == 200
-    data = json.loads(resp.data)
+    data = json.loads(resp.data)['data']
     assert data['id'] == cid
-    assert data['name'] == 'Updated Name'
-    assert data['emoji'] == ''
+    assert data['attributes']['name'] == 'Updated Name'
+    assert data['attributes']['emoji'] == ''
 
     # Update emoji
-    resp = client.put(f'/chats/{cid}', data=json.dumps({'emoji': '🚀'}), content_type='application/json')
+    resp = jsonapi_patch(client, f'/api/chats/{cid}', 'chats', cid, {'emoji': '\U0001f680'})
     assert resp.status_code == 200
-    data = json.loads(resp.data)
+    data = json.loads(resp.data)['data']
     assert data['id'] == cid
-    assert data['name'] == 'Updated Name'
-    assert data['emoji'] == '🚀'
+    assert data['attributes']['name'] == 'Updated Name'
+    assert data['attributes']['emoji'] == '\U0001f680'
 
     # Update both
-    resp = client.put(f'/chats/{cid}', data=json.dumps({'name': 'Final Name', 'emoji': '🌟'}), content_type='application/json')
+    resp = jsonapi_patch(client, f'/api/chats/{cid}', 'chats', cid, {'name': 'Final Name', 'emoji': '\U0001f31f'})
     assert resp.status_code == 200
-    data = json.loads(resp.data)
+    data = json.loads(resp.data)['data']
     assert data['id'] == cid
-    assert data['name'] == 'Final Name'
-    assert data['emoji'] == '🌟'
+    assert data['attributes']['name'] == 'Final Name'
+    assert data['attributes']['emoji'] == '\U0001f31f'
 
     # Verify persistence
-    conn = sqlite3.connect(DB_PATH)
+    db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'chats.db')
+    conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     cur.execute("SELECT name, emoji FROM chats WHERE id = ?", (cid,))
     row = cur.fetchone()
@@ -127,13 +141,12 @@ def test_update_chat_metadata():
 
     assert row is not None
     assert row[0] == 'Final Name'
-    assert row[1] == '🌟'
+    assert row[1] == '\U0001f31f'
 
-    # Test no changes if no name or emoji
-    resp = client.put(f'/chats/{cid}', data=json.dumps({}), content_type='application/json')
-    assert resp.status_code == 400
+    # Test empty attributes (still valid PATCH, just no changes)
+    resp = jsonapi_patch(client, f'/api/chats/{cid}', 'chats', cid, {})
+    assert resp.status_code == 200
 
     # Test non-existent chat
-    resp = client.put('/chats/nonexistent', data=json.dumps({'name': 'New Name'}), content_type='application/json')
+    resp = jsonapi_patch(client, '/api/chats/nonexistent', 'chats', 'nonexistent', {'name': 'New Name'})
     assert resp.status_code == 404
-
