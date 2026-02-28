@@ -7,7 +7,7 @@ import ChatMetadataModal from './components/ChatMetadataModal';
 import { Message } from './types';
 import { useChats, useCreateChat, useDeleteChat, useToggleFavorite, useUpdateChat } from './hooks/useChats';
 import { useMessages } from './hooks/useMessages';
-import { sendMessageStream, reviewChatMetadata, ChatUpdate } from './api';
+import { sendMessageStream, reviewChatMetadata } from './api';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from './hooks/useTheme';
 
@@ -161,19 +161,13 @@ function App() {
           const updatedBot: Message = { ...botMessage, text: streamingTextRef.current, isTyping: false };
           setOptimisticMessages([...serverMessages, userMessage, updatedBot]);
         },
-        (sessionId, chatUpdate: ChatUpdate | null) => {
-          // Streaming done — invalidate queries so server messages take over
+        (sessionId) => {
+          // Streaming done — show server messages. Chat metadata (name/emoji) is
+          // updated by the concurrent shadow POST /chats/{id}/review-metadata.
           setIsStreaming(false);
           setOptimisticMessages([]);
           streamingTextRef.current = '';
           queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
-          // Write metadata update directly into cache — no round-trip needed
-          if (chatUpdate) {
-            queryClient.setQueryData<typeof chats>(['chats'], (old = []) =>
-              old.map(c => c.id === sessionId ? { ...c, ...chatUpdate } : c)
-            );
-          }
-          queryClient.invalidateQueries({ queryKey: ['chats'] });
         },
       );
     } catch (error) {

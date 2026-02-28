@@ -200,7 +200,7 @@ export async function sendMessageStream(
   inputText: string,
   sessionId: string,
   onChunk: (chunk: string) => void,
-  onDone: (sessionId: string, chatUpdate: ChatUpdate | null) => void,
+  onDone: (sessionId: string) => void,
 ): Promise<void> {
   const attrs: Record<string, string> = { input_text: inputText, session_id: sessionId };
 
@@ -233,7 +233,7 @@ export async function sendMessageStream(
       try {
         const event = JSON.parse(jsonStr);
         if (event.done) {
-          onDone(event.session_id, event.chat_update ?? null);
+          onDone(event.session_id);
           return;
         }
         if (event.chunk) {
