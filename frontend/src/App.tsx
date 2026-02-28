@@ -11,6 +11,8 @@ function App() {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [isCreatingChat, setIsCreatingChat] = useState(false);
+  const [newChatName, setNewChatName] = useState('');
 
   useEffect(() => {
     fetchChats();
@@ -38,17 +40,29 @@ function App() {
     }
   };
 
-  const handleNewChat = async () => {
-    const chatName = prompt('Enter chat name:');
-    if (!chatName) return;
+  const handleNewChat = () => {
+    setIsCreatingChat(true);
+    setNewChatName('');
+  };
+
+  const handleCreateChatSubmit = async () => {
+    const name = newChatName.trim();
+    if (!name) return;
+    setIsCreatingChat(false);
+    setNewChatName('');
     try {
-      const chatObj = await api.createChat(chatName);
-      setChats([...chats, chatObj]);
+      const chatObj = await api.createChat(name);
+      setChats(prev => [...prev, chatObj]);
       setCurrentChatId(chatObj.id);
       setCurrentMessages([]);
     } catch (error) {
       console.error('Failed to create chat:', error);
     }
+  };
+
+  const handleCreateChatCancel = () => {
+    setIsCreatingChat(false);
+    setNewChatName('');
   };
 
   const handleSwitchChat = (chatId: string) => {
@@ -115,6 +129,11 @@ function App() {
           onDeleteChat={handleDeleteChat}
           onToggleFavorite={handleToggleFavorite}
           onShowTemplates={() => setShowTemplates(true)}
+          isCreatingChat={isCreatingChat}
+          newChatName={newChatName}
+          onNewChatNameChange={setNewChatName}
+          onCreateChatSubmit={handleCreateChatSubmit}
+          onCreateChatCancel={handleCreateChatCancel}
         />
       )}
       <ChatMessages messages={currentMessages} />

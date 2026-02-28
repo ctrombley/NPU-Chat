@@ -1,5 +1,4 @@
 import logging
-import threading
 import time
 
 from flask import Blueprint, current_app, request
@@ -10,6 +9,7 @@ from jsonapi import (
     parse_request_data,
     serialize_resource,
 )
+from models import Message, db
 from services import (
     ChatService,
     LLMService,
@@ -19,7 +19,6 @@ from services import (
 
 search_bp = Blueprint('search', __name__)
 
-lock = threading.Lock()
 logger = logging.getLogger(__name__)
 
 
@@ -83,21 +82,18 @@ def search():
 
 def web_request_logic(session_id, question):
     config = current_app.config
+    context_depth = config['CONTEXT_DEPTH']
 
     if not session_id:
-        friendly_default_name = f"Chat {len(ChatService.list_chats()) + 1}"
-        chat = ChatService.create_chat(friendly_default_name)
+        chat = ChatService.create_chat("New Chat")
         chat.needs_naming = True
-        from models import db
         db.session.commit()
         session_id = chat.id
 
     chat = ChatService.get_chat(session_id)
     if not chat:
-        friendly_default_name = f"Chat {len(ChatService.list_chats()) + 1}"
-        chat = ChatService.create_chat(friendly_default_name)
+        chat = ChatService.create_chat("New Chat")
         chat.needs_naming = True
-        from models import db
         db.session.commit()
         session_id = chat.id
 
@@ -110,26 +106,21 @@ def web_request_logic(session_id, question):
         messages = ChatService.get_chat_messages(session_id) or []
         context_history = ""
         for m in messages:
-            context_history += f"```\n{m}\n```\n"
+            context_history += f"```\n[{m.role}] {m.content}\n```\n"
         return {'content': context_history, 'session_id': session_id}
 
     if cmd == 'clear':
-        from models import Message
         Message.query.filter_by(chat_id=session_id).delete()
-        from models import db
         db.session.commit()
         return {'content': "context cleared.", 'session_id': session_id}
 
     if cmd == 'off':
-        from models import Message, db
-        config['USE_CONTEXT'] = False
         Message.query.filter_by(chat_id=session_id).delete()
         db.session.commit()
-        return {'content': "context off.", 'session_id': session_id}
+        return {'content': "context off. Note: context toggle is a server-wide setting via settings.ini.", 'session_id': session_id}
 
     if cmd == 'on':
-        config['USE_CONTEXT'] = True
-        return {'content': "context on.", 'session_id': session_id}
+        return {'content': "context on. Note: context toggle is a server-wide setting via settings.ini.", 'session_id': session_id}
 
     if cmd == 'help':
         help_text = (
@@ -142,32 +133,29 @@ def web_request_logic(session_id, question):
         return {'content': help_text, 'session_id': session_id}
 
     # Get template
-    templates = TemplateService.load_templates()
-    template = templates.get(chat.template_id, templates['default'])
+    template = TemplateService.get_template(chat.template_id)
+    if not template:
+        template = TemplateService.get_template('default')
 
-    if lock.locked():
-        return {'content': "Sorry, I can only handle one request at a time and I'm currently busy.", 'session_id': session_id}
+    chat.add_message('user', question, context_depth)
 
-    with lock:
-        chat.add_message(f"User: {question}")
+    messages = ChatService.get_chat_messages(session_id) or []
+    query = question
+    if config['USE_CONTEXT'] and len(messages) > 1:
+        history_msgs = messages[:-1]
+        llm_output_history = ""
+        for msg in history_msgs:
+            llm_output_history += f"```\n{msg.content}\n```\n"
+        query = llm_output_history + question
 
-        messages = ChatService.get_chat_messages(session_id) or []
-        query = question
-        if config['USE_CONTEXT'] and len(messages) > 1:
-            history_msgs = messages[:-1]
-            llm_output_history = ""
-            for llm_reply in history_msgs:
-                llm_output_history = f"{llm_output_history}```\n{llm_reply}\n```\n"
-            query = llm_output_history + question
+    raw_answer = LLMService.feed_the_llama(query, template.prefix, template.postfix)
 
-        raw_answer = LLMService.feed_the_llama(query, template['prefix'], template['postfix'])
+    chat.add_message('assistant', raw_answer, context_depth)
 
-        chat.add_message(f"Assistant: {raw_answer}")
+    if chat.needs_naming:
+        NamingService.generate_name(chat)
 
-        if chat.needs_naming:
-            NamingService.generate_name(chat)
+    elapsed = time.time() - start_time
+    logger.info("Search completed in %.2f seconds", elapsed)
 
-        elapsed = time.time() - start_time
-        logger.info("Search completed in %.2f seconds", elapsed)
-
-        return {'content': raw_answer, 'session_id': session_id}
+    return {'content': raw_answer, 'session_id': session_id}

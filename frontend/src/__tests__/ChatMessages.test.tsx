@@ -39,12 +39,12 @@ describe('ChatMessages', () => {
     expect(messageDiv).toHaveClass('rounded-br-3xl');
   });
 
-  it('renders HTML content for received messages with md tags', () => {
+  it('renders md-tagged content as safe plain text', () => {
     render(<ChatMessages messages={[mockMessages[2]]} />);
 
-    // Should render the HTML content
-    const strongElement = screen.getByText('world');
-    expect(strongElement.tagName).toBe('STRONG');
+    // Should strip md tags and render HTML as escaped text, not as DOM elements
+    const textContent = screen.getByText(/Hello <strong>world<\/strong>/);
+    expect(textContent.tagName).toBe('P');
   });
 
   it('shows copy button only for received messages', () => {

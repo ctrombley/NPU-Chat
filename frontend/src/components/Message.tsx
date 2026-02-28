@@ -9,8 +9,10 @@ interface MessageProps {
 const Message: React.FC<MessageProps> = ({ message }) => {
   const [copyFeedback, setCopyFeedback] = useState(false);
 
+  const getCleanText = (text: string) => text.replace(/<md[^>]*>|<\/md>/g, '');
+
   const handleCopy = async () => {
-    const text = message.text.replace(/<md[^>]*>|<\/md>/g, '');
+    const text = getCleanText(message.text);
     try {
       await navigator.clipboard.writeText(text);
       setCopyFeedback(true);
@@ -20,16 +22,9 @@ const Message: React.FC<MessageProps> = ({ message }) => {
     }
   };
 
-  const renderMessageContent = () => {
-    if (message.type === 'received' && /<md[^>]*>/.test(message.text)) {
-      return <div dangerouslySetInnerHTML={{ __html: message.text }} />;
-    }
-    return <p className="m-0 p-0">{message.text}</p>;
-  };
-
   return (
     <MessageBubble variant={message.type === 'sent' ? 'sent' : 'received'}>
-      {renderMessageContent()}
+      <p className="m-0 p-0">{getCleanText(message.text)}</p>
       {message.type === 'received' && (
         <button
           className={`p-2.5 inline-block bg-gray-600 text-gray-300 text-lg font-bold font-sans no-underline border border-black rounded shadow-lg transition-all w-10 h-10 leading-5 text-center ${

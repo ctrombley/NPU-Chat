@@ -4,19 +4,11 @@ from unittest.mock import patch
 from conftest import JSONAPI_CONTENT_TYPE
 
 from models import Chat, db
-from npuchat import create_app
 
 
-def test_autonaming_on_new_search_session():
+def test_autonaming_on_new_search_session(client):
     """Verify that POSTing to /api/search without session_id creates a new Chat and attempts to auto-name it."""
-    app = create_app(run_migrations=False)
-    app.config['TESTING'] = True
-    client = app.test_client()
-
-    # Ensure clean state
-    with app.app_context():
-        db.session.query(Chat).delete()
-        db.session.commit()
+    app = client.application
 
     # Mock feed_the_llama responses: first call is the content reply, second call is naming JSON
     naming_json = json.dumps({'name': 'Summary', 'emoji': '\U0001f4dd'})

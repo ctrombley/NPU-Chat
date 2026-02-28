@@ -73,10 +73,7 @@ describe('Templates', () => {
     expect(mockOnBack).toHaveBeenCalledTimes(1);
   });
 
-  it('handles edit template flow', async () => {
-    // Mock window.prompt
-    const mockPrompt = jest.spyOn(window, 'prompt').mockImplementation(() => 'New Name');
-
+  it('handles edit template flow with inline form', async () => {
     // Override mock to handle PATCH
     (global.fetch as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
       if (typeof url === 'string' && url.startsWith('/api/templates/') && options?.method === 'PATCH') {
@@ -91,22 +88,30 @@ describe('Templates', () => {
       expect(screen.getByRole('button', { name: 'Edit template Helpful Assistant' })).toBeInTheDocument();
     });
 
+    // Click edit to show inline form
     const editButton = screen.getByRole('button', { name: 'Edit template Helpful Assistant' });
     fireEvent.click(editButton);
+
+    // The inline form should appear with current values
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Helpful Assistant')).toBeInTheDocument();
+    });
+
+    // Change the name
+    const nameInput = screen.getByDisplayValue('Helpful Assistant');
+    fireEvent.change(nameInput, { target: { value: 'New Name' } });
+
+    // Click Save
+    fireEvent.click(screen.getByText('Save'));
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith('/api/templates/template-1', expect.objectContaining({
         method: 'PATCH',
       }));
     });
-
-    mockPrompt.mockRestore();
   });
 
-  it('handles delete template with confirmation', async () => {
-    // Mock window.confirm
-    const mockConfirm = jest.spyOn(window, 'confirm').mockImplementation(() => true);
-
+  it('handles delete template with two-click confirmation', async () => {
     // Override mock to handle DELETE
     (global.fetch as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
       if (typeof url === 'string' && url.startsWith('/api/templates/') && options?.method === 'DELETE') {
@@ -122,6 +127,15 @@ describe('Templates', () => {
     });
 
     const deleteButton = screen.getByRole('button', { name: 'Delete template Helpful Assistant' });
+
+    // First click shows "Confirm?" text
+    fireEvent.click(deleteButton);
+    expect(deleteButton).toHaveTextContent('Confirm?');
+
+    // DELETE should NOT have been called yet
+    expect(global.fetch).not.toHaveBeenCalledWith('/api/templates/template-1', expect.objectContaining({ method: 'DELETE' }));
+
+    // Second click actually deletes
     fireEvent.click(deleteButton);
 
     await waitFor(() => {
@@ -129,13 +143,9 @@ describe('Templates', () => {
         method: 'DELETE',
       }));
     });
-
-    mockConfirm.mockRestore();
   });
 
-  it('does not delete when confirmation is cancelled', async () => {
-    const mockConfirm = jest.spyOn(window, 'confirm').mockImplementation(() => false);
-
+  it('does not delete on first click (two-click required)', async () => {
     render(<Templates onBack={mockOnBack} />);
 
     await waitFor(() => {
@@ -145,17 +155,11 @@ describe('Templates', () => {
     const deleteButton = screen.getByRole('button', { name: 'Delete template Helpful Assistant' });
     fireEvent.click(deleteButton);
 
+    // Only first click happened — should not have called DELETE
     expect(global.fetch).not.toHaveBeenCalledWith('/api/templates/template-1', expect.objectContaining({ method: 'DELETE' }));
-
-    mockConfirm.mockRestore();
   });
 
-  it('handles create new template', async () => {
-    const mockPrompt = jest.spyOn(window, 'prompt');
-    mockPrompt.mockImplementationOnce(() => 'New Template');
-    mockPrompt.mockImplementationOnce(() => 'New prefix');
-    mockPrompt.mockImplementationOnce(() => 'New postfix');
-
+  it('handles create new template with inline form', async () => {
     // Override mock to handle POST
     (global.fetch as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
       if (url === '/api/templates' && options?.method === 'POST') {
@@ -170,16 +174,27 @@ describe('Templates', () => {
       expect(screen.getByRole('button', { name: 'Create new template' })).not.toBeDisabled();
     });
 
+    // Click New Template to show inline form
     const newButton = screen.getByRole('button', { name: 'Create new template' });
     fireEvent.click(newButton);
+
+    // Fill in the form
+    const nameInput = screen.getByPlaceholderText('Template name');
+    const prefixInput = screen.getByPlaceholderText('Prefix');
+    const postfixInput = screen.getByPlaceholderText('Postfix');
+
+    fireEvent.change(nameInput, { target: { value: 'New Template' } });
+    fireEvent.change(prefixInput, { target: { value: 'New prefix' } });
+    fireEvent.change(postfixInput, { target: { value: 'New postfix' } });
+
+    // Click Create
+    fireEvent.click(screen.getByText('Create'));
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith('/api/templates', expect.objectContaining({
         method: 'POST',
       }));
     });
-
-    mockPrompt.mockRestore();
   });
 
   it('handles fetch errors gracefully', async () => {
@@ -200,7 +215,7 @@ describe('Templates', () => {
   it('disables buttons during loading', async () => {
     render(<Templates onBack={mockOnBack} />);
 
-    // Initially loading
+    // Initially loading — "New Template" button should be disabled
     const newButton = screen.getByRole('button', { name: 'Create new template' });
     const backButton = screen.getByRole('button', { name: 'Back to chats' });
 

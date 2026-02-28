@@ -7,12 +7,14 @@ interface TemplateListItemProps {
   template: Template;
   onEdit: (templateId: string) => void;
   onDelete: (templateId: string) => void;
+  isConfirmingDelete?: boolean;
 }
 
 const TemplateListItem: React.FC<TemplateListItemProps> = ({
   template,
   onEdit,
   onDelete,
+  isConfirmingDelete,
 }) => {
   return (
     <ListItem>
@@ -39,7 +41,7 @@ const TemplateListItem: React.FC<TemplateListItemProps> = ({
           onClick={() => onDelete(template.id)}
           aria-label={`Delete template ${template.name}`}
         >
-          ×
+          {isConfirmingDelete ? 'Confirm?' : '×'}
         </IconButton>
       </div>
     </ListItem>

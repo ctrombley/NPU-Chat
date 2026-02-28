@@ -1,4 +1,5 @@
 export interface Message {
+  id?: string;
   type: 'sent' | 'received';
   text: string;
   timestamp: number;
@@ -43,4 +44,29 @@ export interface JsonApiError {
 
 export interface JsonApiErrorDocument {
   errors: JsonApiError[];
+}
+
+// Typed API attribute interfaces
+export interface ChatAttributes {
+  name: string;
+  emoji: string;
+  is_favorite: boolean;
+  message_count: number;
+  created_at: number | null;
+}
+
+export interface MessageAttributes {
+  role: string;
+  content: string;
+}
+
+export interface TemplateAttributes {
+  name: string;
+  prefix: string;
+  postfix: string;
+}
+
+export interface SearchResultAttributes {
+  content: string;
+  session_id: string;
 }

@@ -8,47 +8,20 @@ import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from npuchat import create_app
-
-# Try to import selenium; if not available, we'll skip webdriver tests
-try:
-    from selenium import webdriver
-    from selenium.webdriver.chrome.options import Options
-except Exception:
-    webdriver = None
-    Options = None
-
-@pytest.fixture(scope='function')
-def driver():
-    """
-    Pytest fixture to initialize and teardown Selenium WebDriver.
-    Skips the fixture if selenium is not available in the environment.
-    """
-    if webdriver is None or Options is None:
-        pytest.skip("selenium not available, skipping webdriver tests")
-
-    # Configure Selenium WebDriver with Headless Chrome
-    options = Options()
-    options.add_argument('--headless')
-    options.add_argument('--disable-gpu')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    options.add_argument("--disable-setuid-sandbox")
-    options.add_argument("--ignore-certificate-errors")
-    options.add_argument('--window-size=1200,800')
-
-    driver = webdriver.Chrome(options=options)
-    yield driver  # Provide the fixture to tests
-    driver.quit()  # Ensure the browser quits after tests
+from models import db as _db
 
 @pytest.fixture(scope='function')
 def client():
     """
-    Pytest fixture to provide a Flask test client.
+    Pytest fixture to provide a Flask test client with a clean database.
     """
     app = create_app(run_migrations=False)
     app.config['TESTING'] = True
-    with app.test_client() as client:
-        yield client
+    with app.app_context():
+        _db.create_all()
+        yield app.test_client()
+        _db.session.remove()
+        _db.drop_all()
 
 
 # --- JSON:API test helpers ---

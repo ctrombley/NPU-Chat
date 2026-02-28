@@ -2,15 +2,9 @@ import json
 
 from conftest import JSONAPI_CONTENT_TYPE
 
-from npuchat import create_app
 
-
-def test_empty_input():
+def test_empty_input(client):
     """Test for empty input"""
-    app = create_app(run_migrations=False)
-    app.config['TESTING'] = True
-    client = app.test_client()
-
     response = client.post(
         '/api/search',
         data=json.dumps({'data': {'type': 'search-requests', 'attributes': {'input_text': ''}}}),
@@ -22,12 +16,8 @@ def test_empty_input():
     assert 'empty input' in body['errors'][0]['detail'].lower()
 
 
-def test_whitespace_only_input():
+def test_whitespace_only_input(client):
     """Test for whitespace-only input"""
-    app = create_app(run_migrations=False)
-    app.config['TESTING'] = True
-    client = app.test_client()
-
     response = client.post(
         '/api/search',
         data=json.dumps({'data': {'type': 'search-requests', 'attributes': {'input_text': '   '}}}),
@@ -39,12 +29,8 @@ def test_whitespace_only_input():
     assert 'empty input' in body['errors'][0]['detail'].lower()
 
 
-def test_missing_request_body():
+def test_missing_request_body(client):
     """Test for missing request body"""
-    app = create_app(run_migrations=False)
-    app.config['TESTING'] = True
-    client = app.test_client()
-
     response = client.post(
         '/api/search',
         data='{}',

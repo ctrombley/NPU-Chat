@@ -1,14 +1,14 @@
 import json
 import logging
 import re
-import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 import requests
 from flask import current_app
 from requests.exceptions import Timeout
 
-from models import Chat, Template, db
+from models import Chat, Message, Template, db
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class ChatService:
     @staticmethod
     def create_chat(name: str) -> Chat:
-        chat_id = f"chat-{int(time.time() * 1000)}"
+        chat_id = str(uuid.uuid4())
         chat = Chat(id=chat_id, name=name, needs_naming=False)
         db.session.add(chat)
         db.session.commit()
@@ -56,19 +56,20 @@ class ChatService:
         return Chat.query.order_by(Chat.created_at).all()
 
     @staticmethod
-    def get_chat_messages(chat_id: str) -> Optional[List[str]]:
+    def get_chat_messages(chat_id: str) -> Optional[List[Message]]:
         chat = db.session.get(Chat, chat_id)
         if not chat:
             return None
-        return [msg.content for msg in chat.messages]
+        return list(chat.messages)
 
 class TemplateService:
     @staticmethod
-    def load_templates() -> Dict[str, Dict[str, str]]:
-        templates = {}
-        for template in Template.query.all():
-            templates[template.id] = template.to_dict()
-        if 'default' not in templates:
+    def list_templates() -> List[Template]:
+        return Template.query.all()
+
+    @staticmethod
+    def ensure_default_template() -> None:
+        if not db.session.get(Template, 'default'):
             default = Template(
                 id='default',
                 name='Default',
@@ -77,12 +78,14 @@ class TemplateService:
             )
             db.session.add(default)
             db.session.commit()
-            templates['default'] = default.to_dict()
-        return templates
+
+    @staticmethod
+    def get_template(template_id: str) -> Optional[Template]:
+        return db.session.get(Template, template_id)
 
     @staticmethod
     def create_template(name: str, prefix: str, postfix: str) -> Template:
-        template_id = f"template-{int(time.time() * 1000)}"
+        template_id = str(uuid.uuid4())
         template = Template(id=template_id, name=name, prefix=prefix, postfix=postfix)
         db.session.add(template)
         db.session.commit()
@@ -150,18 +153,21 @@ class NamingService:
                 "Please provide a very short (1-3 words) descriptive name for the conversation we just had, "
                 "and a single emoji that summarizes it. Respond ONLY with a JSON object like: {\"name\": \"...\", \"emoji\": \"...\"}."
             )
-            templates = TemplateService.load_templates()
-            naming_response = LLMService.feed_the_llama(naming_prompt, templates['default']['prefix'], templates['default']['postfix'])
+            default_template = TemplateService.get_template('default')
+            if not default_template:
+                TemplateService.ensure_default_template()
+                default_template = TemplateService.get_template('default')
+            naming_response = LLMService.feed_the_llama(naming_prompt, default_template.prefix, default_template.postfix)
 
             parsed = None
             try:
                 parsed = json.loads(naming_response)
-            except Exception:
+            except (json.JSONDecodeError, ValueError):
                 m = re.search(r"(\{.*\})", naming_response, re.DOTALL)
                 if m:
                     try:
                         parsed = json.loads(m.group(1))
-                    except Exception:
+                    except (json.JSONDecodeError, ValueError):
                         parsed = None
 
             if isinstance(parsed, dict):
@@ -170,7 +176,7 @@ class NamingService:
                 if name:
                     chat.name = name
                     chat.emoji = emoji
-                chat.needs_naming = False
-                db.session.commit()
+                    chat.needs_naming = False
+                    db.session.commit()
         except Exception as e:
             logger.exception("Failed to generate chat name: %s", e)

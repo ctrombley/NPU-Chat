@@ -16,9 +16,9 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/search': 'http://localhost:5000',
-      '/chats': 'http://localhost:5000',
-      '/templates': 'http://localhost:5000',
+      '/api/search': 'http://localhost:5000',
+      '/api/chats': 'http://localhost:5000',
+      '/api/templates': 'http://localhost:5000',
     }
   }
 })

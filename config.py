@@ -8,10 +8,7 @@ class Config:
         self.load_config(script_dir)
 
     def load_config(self, script_dir):
-        if script_dir and script_dir[-1] != '/':
-            script_dir = script_dir + "/"
-
-        config_path = f"{script_dir}settings.ini"
+        config_path = os.path.join(script_dir, 'settings.ini')
         parser = configparser.ConfigParser()
         parser.read(config_path)
 

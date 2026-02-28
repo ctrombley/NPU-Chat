@@ -18,7 +18,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages }) => {
       <div className="absolute inset-0 bg-chat-bg opacity-10 radial-gradient"></div>
       <div className="relative">
         {messages.map((message, index) => (
-          <Message key={index} message={message} />
+          <Message key={message.id || index} message={message} />
         ))}
         <div ref={messagesEndRef} data-testid="messages-end" />
       </div>

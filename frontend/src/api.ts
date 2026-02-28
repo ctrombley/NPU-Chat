@@ -1,16 +1,17 @@
-import { Chat, Message, Template, ChatResponse } from './types';
+import {
+  Chat,
+  ChatAttributes,
+  ChatResponse,
+  JsonApiDocument,
+  JsonApiResource,
+  Message,
+  MessageAttributes,
+  SearchResultAttributes,
+  Template,
+  TemplateAttributes,
+} from './types';
 
 const JSONAPI_CONTENT_TYPE = 'application/vnd.api+json';
-
-interface JsonApiResource<T = Record<string, unknown>> {
-  type: string;
-  id: string;
-  attributes: T;
-}
-
-interface JsonApiDocument<T = Record<string, unknown>> {
-  data: JsonApiResource<T> | JsonApiResource<T>[];
-}
 
 function unwrapResource<T>(resource: JsonApiResource<T>): T & { id: string } {
   return { id: resource.id, ...resource.attributes };
@@ -41,12 +42,12 @@ async function apiFetch(url: string, options: RequestInit = {}): Promise<Respons
 export async function listChats(): Promise<Chat[]> {
   const response = await apiFetch('/api/chats');
   if (!response.ok) throw new Error('Failed to fetch chats');
-  const doc: JsonApiDocument = await response.json();
+  const doc: JsonApiDocument<ChatAttributes> = await response.json();
   return unwrapCollection(doc).map(c => ({
     id: c.id,
-    name: c.name as string,
-    emoji: (c.emoji as string) || '',
-    is_favorite: (c.is_favorite as boolean) || false,
+    name: c.name,
+    emoji: c.emoji || '',
+    is_favorite: c.is_favorite || false,
     messages: [],
   }));
 }
@@ -57,13 +58,13 @@ export async function createChat(name: string): Promise<Chat> {
     body: JSON.stringify(wrapResource('chats', { name })),
   });
   if (!response.ok) throw new Error('Failed to create chat');
-  const doc: JsonApiDocument = await response.json();
+  const doc: JsonApiDocument<ChatAttributes> = await response.json();
   const resource = Array.isArray(doc.data) ? doc.data[0] : doc.data;
   return {
     id: resource.id,
-    name: resource.attributes.name as string,
-    emoji: (resource.attributes.emoji as string) || '',
-    is_favorite: (resource.attributes.is_favorite as boolean) || false,
+    name: resource.attributes.name,
+    emoji: resource.attributes.emoji || '',
+    is_favorite: resource.attributes.is_favorite || false,
     messages: [],
   };
 }
@@ -87,10 +88,11 @@ export async function deleteChat(chatId: string): Promise<void> {
 export async function getChatMessages(chatId: string): Promise<Message[]> {
   const response = await apiFetch(`/api/chats/${chatId}/messages`);
   if (!response.ok) throw new Error('Failed to fetch messages');
-  const doc: JsonApiDocument = await response.json();
+  const doc: JsonApiDocument<MessageAttributes> = await response.json();
   return unwrapCollection(doc).map(m => ({
-    type: (m.role as string) === 'user' ? 'sent' as const : 'received' as const,
-    text: m.content as string,
+    id: m.id,
+    type: m.role === 'user' ? 'sent' as const : 'received' as const,
+    text: m.content,
     timestamp: Date.now(),
   }));
 }
@@ -100,12 +102,12 @@ export async function getChatMessages(chatId: string): Promise<Message[]> {
 export async function listTemplates(): Promise<Template[]> {
   const response = await apiFetch('/api/templates');
   if (!response.ok) throw new Error('Failed to fetch templates');
-  const doc: JsonApiDocument = await response.json();
+  const doc: JsonApiDocument<TemplateAttributes> = await response.json();
   return unwrapCollection(doc).map(t => ({
     id: t.id,
-    name: t.name as string,
-    prefix: t.prefix as string,
-    postfix: t.postfix as string,
+    name: t.name,
+    prefix: t.prefix,
+    postfix: t.postfix,
   }));
 }
 
@@ -144,10 +146,10 @@ export async function sendMessage(inputText: string, sessionId?: string): Promis
     body: JSON.stringify(wrapResource('search-requests', attrs)),
   });
   if (!response.ok) throw new Error('Failed to send message');
-  const doc: JsonApiDocument = await response.json();
+  const doc: JsonApiDocument<SearchResultAttributes> = await response.json();
   const resource = Array.isArray(doc.data) ? doc.data[0] : doc.data;
   return {
-    content: resource.attributes.content as string,
-    session_id: resource.attributes.session_id as string,
+    content: resource.attributes.content,
+    session_id: resource.attributes.session_id,
   };
 }

@@ -24,8 +24,8 @@ def list_templates():
       200:
         description: A list of templates
     """
-    templates = TemplateService.load_templates()
-    items = list(templates.values())
+    templates = TemplateService.list_templates()
+    items = [t.to_dict() for t in templates]
     return jsonapi_response(serialize_collection('templates', items))
 
 
@@ -101,9 +101,7 @@ def get_template(template_id):
       404:
         description: Template not found
     """
-    from models import Template as TemplateModel
-    from models import db
-    template = db.session.get(TemplateModel, template_id)
+    template = TemplateService.get_template(template_id)
     if not template:
         return jsonapi_error_response(404, 'Not Found', 'Template not found')
 

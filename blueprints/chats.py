@@ -228,6 +228,6 @@ def get_chat_messages(chat_id):
         items.append({
             'id': str(msg.id),
             'role': msg.role,
-            'content': msg.text,
+            'content': msg.content,
         })
     return jsonapi_response(serialize_collection('messages', items))

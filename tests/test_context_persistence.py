@@ -1,11 +1,9 @@
 import json
 from unittest.mock import patch
 
-import pytest
 from conftest import JSONAPI_CONTENT_TYPE
 
 from models import Chat, db
-from npuchat import create_app
 from services import ChatService
 
 
@@ -17,11 +15,10 @@ class MockResponse:
         return self._data
 
     def raise_for_status(self):
-        # Simulate successful status
         return None
 
 
-def test_context_persistence_and_autoname(monkeypatch):
+def test_context_persistence_and_autoname(client, monkeypatch):
     """Verify that assistant replies are preserved in server-side context across messages
 
     We mock requests.post to simulate the NPU/LLM. The sequence of mocked responses is:
@@ -35,14 +32,7 @@ def test_context_persistence_and_autoname(monkeypatch):
       - the auto-naming step updates the chat.name when valid JSON is returned
       - the second LLM invocation receives the previous assistant reply in its `input_str` (i.e. context was prepended)
     """
-
-    app = create_app(run_migrations=False)
-    app.config['TESTING'] = True
-
-    # Start with a clean server-side state
-    with app.app_context():
-        db.session.query(Chat).delete()
-        db.session.commit()
+    app = client.application
 
     # Prepare mocked responses for the sequence of LLM calls
     responses = [
@@ -54,17 +44,12 @@ def test_context_persistence_and_autoname(monkeypatch):
     call_log = []
 
     def fake_post(url, headers=None, json=None, timeout=None):
-        # Record the outgoing payload so tests can inspect it
         call_log.append(json)
-        # Pop the next prepared response
         if not responses:
             return MockResponse({"content": ""})
         return MockResponse(responses.pop(0))
 
-    # Patch requests.post used by services.LLMService.feed_the_llama
     monkeypatch.setattr('services.requests.post', fake_post)
-
-    client = app.test_client()
 
     # 1) First user message -- no session_id provided so server creates one
     rv = client.post(
@@ -82,8 +67,9 @@ def test_context_persistence_and_autoname(monkeypatch):
         chat = db.session.get(Chat, session_id)
         assert chat is not None
         messages = ChatService.get_chat_messages(session_id) or []
-        assert any('User: This chat is about apples.' in m for m in messages), "User message not saved"
-        assert any('Assistant: Okay, this chat is about apples.' in m for m in messages), "Assistant reply not saved"
+        # Messages now have role column instead of prefixed content
+        assert any(m.role == 'user' and 'This chat is about apples.' in m.content for m in messages), "User message not saved"
+        assert any(m.role == 'assistant' and 'Okay, this chat is about apples.' in m.content for m in messages), "Assistant reply not saved"
 
         # Auto-naming should have run and set a name (best-effort)
         assert not chat.needs_naming
@@ -101,5 +87,5 @@ def test_context_persistence_and_autoname(monkeypatch):
 
     # The follow-up LLM call should include the previous assistant reply in its payload.
     assert call_log, "No LLM calls were recorded"
-    assert any(p and 'input_str' in p and 'Assistant: Okay, this chat is about apples.' in p['input_str'] for p in call_log), \
+    assert any(p and 'input_str' in p and 'Okay, this chat is about apples.' in p['input_str'] for p in call_log), \
         "Context (previous assistant reply) was not included in any LLM call payload"

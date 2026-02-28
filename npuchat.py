@@ -29,7 +29,7 @@ def create_app(run_migrations=True):
             upgrade()
         else:
             db.create_all()
-        TemplateService.load_templates()
+        TemplateService.ensure_default_template()
 
     app.config['SWAGGER'] = {
         'title': 'NPU-Chat API',
@@ -86,5 +86,4 @@ def create_app(run_migrations=True):
 
 if __name__ == '__main__':
     app = create_app()
-    config = Config()
-    app.run(host=config.BINDING_ADDRESS, port=config.BINDING_PORT, debug=False)
+    app.run(host=app.config['BINDING_ADDRESS'], port=app.config['BINDING_PORT'], debug=False)

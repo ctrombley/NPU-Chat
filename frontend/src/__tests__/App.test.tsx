@@ -69,23 +69,26 @@ describe('App Integration', () => {
       return defaultMockFetch(url, options);
     });
 
-    // Mock window.prompt to provide chat name
-    const mockPrompt = jest.spyOn(window, 'prompt').mockReturnValue('New Chat');
-
     render(<App />);
 
     await waitFor(() => {
-      const newChatButton = screen.getByRole('button', { name: 'Create new chat' });
-      fireEvent.click(newChatButton);
+      expect(screen.getByRole('button', { name: 'Create new chat' })).toBeInTheDocument();
     });
+
+    // Click New Chat to show inline input
+    const newChatButton = screen.getByRole('button', { name: 'Create new chat' });
+    fireEvent.click(newChatButton);
+
+    // Type a name in the inline input and submit
+    const nameInput = screen.getByPlaceholderText('Chat name...');
+    fireEvent.change(nameInput, { target: { value: 'New Chat' } });
+    fireEvent.click(screen.getByText('OK'));
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith('/api/chats', expect.objectContaining({
         method: 'POST',
       }));
     });
-
-    mockPrompt.mockRestore();
   });
 
   it('sends messages successfully', async () => {
@@ -183,23 +186,25 @@ describe('App Integration', () => {
       return defaultMockFetch(url, options);
     });
 
-    // Mock window.prompt so handleNewChat proceeds
-    const mockPrompt = jest.spyOn(window, 'prompt').mockReturnValue('Test');
-
     render(<App />);
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Create new chat' })).toBeInTheDocument();
     });
 
+    // Click New Chat to show inline input
     const newChatButton = screen.getByRole('button', { name: 'Create new chat' });
     fireEvent.click(newChatButton);
+
+    // Type name and submit
+    const nameInput = screen.getByPlaceholderText('Chat name...');
+    fireEvent.change(nameInput, { target: { value: 'Test' } });
+    fireEvent.click(screen.getByText('OK'));
 
     await waitFor(() => {
       expect(consoleSpy).toHaveBeenCalledWith('Failed to create chat:', expect.any(Error));
     });
 
     consoleSpy.mockRestore();
-    mockPrompt.mockRestore();
   });
 });

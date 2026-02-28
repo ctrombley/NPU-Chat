@@ -1,40 +1,17 @@
 import json
-import os
-import sqlite3
 
 from conftest import (
     JSONAPI_CONTENT_TYPE,
-    get_jsonapi_attrs,
     get_jsonapi_id,
     jsonapi_patch,
     jsonapi_post,
 )
 
 from npuchat import create_app
-from services import LLMService
+from models import Chat, Message, db
 
 
-def setup_function():
-    db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'chats.db')
-    if os.path.exists(db_path):
-        try:
-            os.remove(db_path)
-        except Exception:
-            pass
-
-
-def test_auto_naming_and_persistence(monkeypatch):
-    app = create_app(run_migrations=False)
-    app.config['TESTING'] = True
-
-    # Start with a clean server-side state
-    with app.app_context():
-        from models import Chat, db
-        db.session.query(Chat).delete()
-        db.session.commit()
-
-    client = app.test_client()
-
+def test_auto_naming_and_persistence(client, monkeypatch):
     # Monkeypatch feed_the_llama to return predictable assistant response and naming JSON
     responses = [
         "This is the assistant reply.",
@@ -57,54 +34,33 @@ def test_auto_naming_and_persistence(monkeypatch):
     body = json.loads(resp.data)
     session_id = body['data']['attributes']['session_id']
 
-    # Verify data in SQLite
-    db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'chats.db')
-    conn = sqlite3.connect(db_path)
-    cur = conn.cursor()
-    cur.execute("SELECT name, emoji FROM chats WHERE id = ?", (session_id,))
-    row = cur.fetchone()
-    conn.close()
+    # Verify data using SQLAlchemy
+    app = client.application
+    with app.app_context():
+        chat = db.session.get(Chat, session_id)
+        assert chat is not None
+        assert chat.name == 'Quick Help'
+        assert chat.emoji == '\u26a1'
 
-    assert row is not None
-    assert row[0] == 'Quick Help'
-    assert row[1] == '\u26a1'
-
-    # Check messages exist
-    conn = sqlite3.connect(db_path)
-    cur = conn.cursor()
-    cur.execute("SELECT content FROM messages WHERE chat_id = ? ORDER BY position", (session_id,))
-    msgs = [r[0] for r in cur.fetchall()]
-    conn.close()
-
-    assert any('User:' in m for m in msgs)
-    assert any('Assistant:' in m for m in msgs)
+        # Check messages exist
+        msgs = Message.query.filter_by(chat_id=session_id).order_by(Message.position).all()
+        assert any(m.role == 'user' for m in msgs)
+        assert any(m.role == 'assistant' for m in msgs)
 
 
-def test_explicit_chat_creation_persists_name():
-    app = create_app(run_migrations=False)
-    app.config['TESTING'] = True
-    client = app.test_client()
-
+def test_explicit_chat_creation_persists_name(client):
     resp = jsonapi_post(client, '/api/chats', 'chats', {'name': 'Persisted Chat'})
     assert resp.status_code == 201
     cid = get_jsonapi_id(resp)
 
-    db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'chats.db')
-    conn = sqlite3.connect(db_path)
-    cur = conn.cursor()
-    cur.execute("SELECT name FROM chats WHERE id = ?", (cid,))
-    row = cur.fetchone()
-    conn.close()
-
-    assert row is not None
-    assert row[0] == 'Persisted Chat'
+    app = client.application
+    with app.app_context():
+        chat = db.session.get(Chat, cid)
+        assert chat is not None
+        assert chat.name == 'Persisted Chat'
 
 
-def test_update_chat_metadata():
-    app = create_app(run_migrations=False)
-    app.config['TESTING'] = True
-    client = app.test_client()
-
+def test_update_chat_metadata(client):
     # Create a chat first
     resp = jsonapi_post(client, '/api/chats', 'chats', {'name': 'Original Name'})
     assert resp.status_code == 201
@@ -134,17 +90,13 @@ def test_update_chat_metadata():
     assert data['attributes']['name'] == 'Final Name'
     assert data['attributes']['emoji'] == '\U0001f31f'
 
-    # Verify persistence
-    db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'chats.db')
-    conn = sqlite3.connect(db_path)
-    cur = conn.cursor()
-    cur.execute("SELECT name, emoji FROM chats WHERE id = ?", (cid,))
-    row = cur.fetchone()
-    conn.close()
-
-    assert row is not None
-    assert row[0] == 'Final Name'
-    assert row[1] == '\U0001f31f'
+    # Verify persistence via SQLAlchemy
+    app = client.application
+    with app.app_context():
+        chat = db.session.get(Chat, cid)
+        assert chat is not None
+        assert chat.name == 'Final Name'
+        assert chat.emoji == '\U0001f31f'
 
     # Test empty attributes (still valid PATCH, just no changes)
     resp = jsonapi_patch(client, f'/api/chats/{cid}', 'chats', cid, {})

@@ -17,15 +17,12 @@ class Chat(db.Model):
 
     messages = db.relationship('Message', backref='chat', lazy=True, order_by='Message.position')
 
-    def __init__(self, id, name, emoji='', template_id='default', needs_naming=False, is_favorite=False, messages=None):
+    def __init__(self, id, name, emoji='', template_id='default', needs_naming=False, is_favorite=False):
         self.id = id
         self.name = name
         self.emoji = emoji
         self.template_id = template_id
         self.needs_naming = needs_naming
-        if messages:
-            for idx, msg in enumerate(messages):
-                db.session.add(Message(chat_id=id, content=msg, position=idx))
 
     def to_dict(self):
         display_name = f"{self.emoji} {self.name}".strip() if self.emoji else self.name
@@ -38,45 +35,24 @@ class Chat(db.Model):
             'created_at': int(self.created_at.timestamp() * 1000) if self.created_at else None
         }
 
-    def add_message(self, message):
-        from flask import current_app
-        CONTEXT_DEPTH = current_app.config['CONTEXT_DEPTH']
+    def add_message(self, role, content, context_depth):
         new_position = len(self.messages)
-        msg = Message(chat_id=self.id, content=message, position=new_position)
+        msg = Message(chat_id=self.id, role=role, content=content, position=new_position)
         db.session.add(msg)
-        db.session.commit()
-        if len(self.messages) > CONTEXT_DEPTH:
+        if len(self.messages) + 1 > context_depth:
             oldest = Message.query.filter_by(chat_id=self.id).order_by(Message.position).first()
             if oldest:
                 db.session.delete(oldest)
-                remaining = Message.query.filter_by(chat_id=self.id).order_by(Message.position).all()
-                for i, m in enumerate(remaining):
-                    m.position = i
-                db.session.commit()
+        db.session.commit()
 
 class Message(db.Model):
     __tablename__ = 'messages'
 
     id = db.Column(db.Integer, primary_key=True)
     chat_id = db.Column(db.String(50), db.ForeignKey('chats.id'), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default='system')
     content = db.Column(db.Text, nullable=False)
     position = db.Column(db.Integer, nullable=False)
-
-    @property
-    def role(self):
-        if self.content.startswith('User: '):
-            return 'user'
-        elif self.content.startswith('Assistant: '):
-            return 'assistant'
-        return 'system'
-
-    @property
-    def text(self):
-        if self.content.startswith('User: '):
-            return self.content[6:]
-        elif self.content.startswith('Assistant: '):
-            return self.content[11:]
-        return self.content
 
 class Template(db.Model):
     __tablename__ = 'templates'
