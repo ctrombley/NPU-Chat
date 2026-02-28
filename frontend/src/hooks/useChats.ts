@@ -32,6 +32,17 @@ export function useDeleteChat() {
   });
 }
 
+export function useUpdateChat() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ chatId, attrs }: { chatId: string; attrs: Partial<{ name: string; emoji: string; template_id: string }> }) =>
+      api.updateChat(chatId, attrs),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['chats'] });
+    },
+  });
+}
+
 export function useToggleFavorite() {
   const queryClient = useQueryClient();
   return useMutation({

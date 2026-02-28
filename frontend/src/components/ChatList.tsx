@@ -11,6 +11,7 @@ interface ChatListProps {
   onSwitchChat: (chatId: string) => void;
   onDeleteChat: (chatId: string) => void;
   onToggleFavorite: (chatId: string, isFavorite: boolean) => void;
+  onEditChat: (chatId: string) => void;
   onShowTemplates: () => void;
   sidebarWidth?: number;
 }
@@ -22,6 +23,7 @@ const ChatList: React.FC<ChatListProps> = ({
   onSwitchChat,
   onDeleteChat,
   onToggleFavorite,
+  onEditChat,
   onShowTemplates,
   sidebarWidth,
 }) => {
@@ -37,6 +39,7 @@ const ChatList: React.FC<ChatListProps> = ({
             onSwitchChat={onSwitchChat}
             onToggleFavorite={onToggleFavorite}
             onDeleteChat={onDeleteChat}
+            onEditChat={onEditChat}
           />
         ))}
       </ul>

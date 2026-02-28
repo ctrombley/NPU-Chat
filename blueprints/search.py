@@ -16,7 +16,6 @@ from schemas import SearchRequest
 from services import (
     ChatService,
     LLMService,
-    NamingService,
     TemplateService,
 )
 
@@ -100,15 +99,11 @@ def search_stream():
 
     if not session_id:
         chat = ChatService.create_chat("New Chat")
-        chat.needs_naming = True
-        db.session.commit()
         session_id = chat.id
 
     chat = ChatService.get_chat(session_id)
     if not chat:
         chat = ChatService.create_chat("New Chat")
-        chat.needs_naming = True
-        db.session.commit()
         session_id = chat.id
 
     # Quick commands — return as a single SSE event, not streamed
@@ -146,7 +141,6 @@ def search_stream():
 
     # We need to capture these for the generator closure
     chat_id = chat.id
-    needs_naming = chat.needs_naming
     prefix = template.prefix
     postfix = template.postfix
 
@@ -167,8 +161,6 @@ def search_stream():
             c = ChatService.get_chat(chat_id)
             if c:
                 c.add_message('assistant', complete_text)
-                if needs_naming:
-                    NamingService.generate_name(c)
 
         yield f"data: {json.dumps({'session_id': chat_id, 'done': True})}\n\n"
 
@@ -209,15 +201,11 @@ def web_request_logic(session_id, question):
 
     if not session_id:
         chat = ChatService.create_chat("New Chat")
-        chat.needs_naming = True
-        db.session.commit()
         session_id = chat.id
 
     chat = ChatService.get_chat(session_id)
     if not chat:
         chat = ChatService.create_chat("New Chat")
-        chat.needs_naming = True
-        db.session.commit()
         session_id = chat.id
 
     start_time = time.time()
@@ -274,9 +262,6 @@ def web_request_logic(session_id, question):
     raw_answer = LLMService.feed_the_llama(query, template.prefix, template.postfix)
 
     chat.add_message('assistant', raw_answer)
-
-    if chat.needs_naming:
-        NamingService.generate_name(chat)
 
     elapsed = time.time() - start_time
     logger.info("Search completed in %.2f seconds", elapsed)

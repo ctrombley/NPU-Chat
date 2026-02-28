@@ -12,6 +12,7 @@ const mockProps = {
   onSwitchChat: jest.fn(),
   onDeleteChat: jest.fn(),
   onToggleFavorite: jest.fn(),
+  onEditChat: jest.fn(),
   onShowTemplates: jest.fn(),
 };
 

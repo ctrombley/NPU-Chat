@@ -10,6 +10,7 @@ interface ChatListItemProps {
   onSwitchChat: (chatId: string) => void;
   onToggleFavorite: (chatId: string, isFavorite: boolean) => void;
   onDeleteChat: (chatId: string) => void;
+  onEditChat: (chatId: string) => void;
 }
 
 const ChatListItem: React.FC<ChatListItemProps> = ({
@@ -19,6 +20,7 @@ const ChatListItem: React.FC<ChatListItemProps> = ({
   onSwitchChat,
   onToggleFavorite,
   onDeleteChat,
+  onEditChat,
 }) => {
   const handleToggleFavorite = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -28,6 +30,11 @@ const ChatListItem: React.FC<ChatListItemProps> = ({
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     onDeleteChat(chat.id);
+  };
+
+  const handleEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onEditChat(chat.id);
   };
 
   return (
@@ -45,13 +52,21 @@ const ChatListItem: React.FC<ChatListItemProps> = ({
         </IconButton>
         {chat.emoji} {chat.name || `Chat ${index + 1}`}
       </span>
-      <IconButton
-        variant="danger"
-        onClick={handleDelete}
-        aria-label="Delete chat"
-      >
-        ×
-      </IconButton>
+      <span className="flex items-center gap-0.5">
+        <IconButton
+          onClick={handleEdit}
+          aria-label="Edit chat"
+        >
+          ⚙
+        </IconButton>
+        <IconButton
+          variant="danger"
+          onClick={handleDelete}
+          aria-label="Delete chat"
+        >
+          ×
+        </IconButton>
+      </span>
     </ListItem>
   );
 };

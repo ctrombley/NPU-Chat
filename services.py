@@ -1,6 +1,5 @@
 import json
 import logging
-import re
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -26,11 +25,10 @@ class ChatService:
 
     @staticmethod
     def create_chat(name: Optional[str] = None, template_id: Optional[str] = None) -> Chat:
-        auto_named = not name
-        if auto_named:
+        if not name:
             name = ChatService._next_default_name()
         chat_id = str(uuid.uuid4())
-        chat = Chat(id=chat_id, name=name, needs_naming=auto_named,
+        chat = Chat(id=chat_id, name=name,
                     template_id=template_id or 'default')
         db.session.add(chat)
         db.session.commit()
@@ -243,44 +241,3 @@ class LLMService:
 
         return _stream()
 
-class NamingService:
-    @staticmethod
-    def generate_name(chat: Chat) -> None:
-        try:
-            naming_prompt = (
-                "Please provide a very short (1-3 words) descriptive name for the conversation we just had, "
-                "and a single emoji that summarizes it. Respond ONLY with a JSON object like: {\"name\": \"...\", \"emoji\": \"...\"}."
-            )
-            default_template = TemplateService.get_template('default')
-            if not default_template:
-                TemplateService.ensure_default_template()
-                default_template = TemplateService.get_template('default')
-            naming_response = LLMService.feed_the_llama(naming_prompt, default_template.prefix, default_template.postfix)
-            logger.debug("Raw LLM naming response: %s", naming_response)
-
-            parsed = None
-            try:
-                parsed = json.loads(naming_response)
-            except (json.JSONDecodeError, ValueError):
-                m = re.search(r"(\{.*\})", naming_response, re.DOTALL)
-                if m:
-                    try:
-                        parsed = json.loads(m.group(1))
-                    except (json.JSONDecodeError, ValueError):
-                        parsed = None
-
-            if isinstance(parsed, dict):
-                name = parsed.get('name', '').strip()
-                emoji = parsed.get('emoji', '').strip()
-                if name:
-                    chat.name = name
-                    chat.emoji = emoji
-                    chat.needs_naming = False
-                    db.session.commit()
-                    logger.info("Chat %s renamed to '%s' %s", chat.id, name, emoji)
-                else:
-                    logger.warning("Naming response parsed but 'name' was empty for chat %s", chat.id)
-            else:
-                logger.warning("Failed to parse naming response for chat %s: %s", chat.id, naming_response)
-        except Exception as e:
-            logger.exception("Failed to generate chat name: %s", e)

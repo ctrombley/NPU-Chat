@@ -3,8 +3,9 @@ import ChatList from './components/ChatList';
 import ChatMessages from './components/ChatMessages';
 import MessageInput from './components/MessageInput';
 import Templates from './components/Templates';
+import ChatMetadataModal from './components/ChatMetadataModal';
 import { Message } from './types';
-import { useChats, useCreateChat, useDeleteChat, useToggleFavorite } from './hooks/useChats';
+import { useChats, useCreateChat, useDeleteChat, useToggleFavorite, useUpdateChat } from './hooks/useChats';
 import { useMessages } from './hooks/useMessages';
 import { sendMessageStream } from './api';
 import { useQueryClient } from '@tanstack/react-query';
@@ -12,6 +13,7 @@ import { useQueryClient } from '@tanstack/react-query';
 function App() {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const [optimisticMessages, setOptimisticMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(220);
@@ -24,6 +26,7 @@ function App() {
   const createChatMutation = useCreateChat();
   const deleteChatMutation = useDeleteChat();
   const toggleFavoriteMutation = useToggleFavorite();
+  const updateChatMutation = useUpdateChat();
 
   // Select first chat when chats load and none is selected
   useEffect(() => {
@@ -110,6 +113,19 @@ function App() {
     }
   };
 
+  const handleEditChat = (chatId: string) => {
+    setEditingChatId(chatId);
+  };
+
+  const handleSaveChat = async (chatId: string, attrs: { name?: string; emoji?: string; template_id?: string }) => {
+    try {
+      await updateChatMutation.mutateAsync({ chatId, attrs });
+      setEditingChatId(null);
+    } catch (error) {
+      console.error('Failed to update chat:', error);
+    }
+  };
+
   const handleSendMessage = async (messageText: string) => {
     if (!currentChatId) return;
 
@@ -161,6 +177,7 @@ function App() {
         onSwitchChat={handleSwitchChat}
         onDeleteChat={handleDeleteChat}
         onToggleFavorite={handleToggleFavorite}
+        onEditChat={handleEditChat}
         onShowTemplates={() => setShowTemplates(true)}
         sidebarWidth={sidebarWidth}
       />
@@ -177,6 +194,16 @@ function App() {
       {showTemplates && (
         <Templates onClose={() => setShowTemplates(false)} onNewChatWithTemplate={handleNewChatWithTemplate} />
       )}
+      {editingChatId && (() => {
+        const editingChat = chats.find(c => c.id === editingChatId);
+        return editingChat ? (
+          <ChatMetadataModal
+            chat={editingChat}
+            onSave={handleSaveChat}
+            onClose={() => setEditingChatId(null)}
+          />
+        ) : null;
+      })()}
     </div>
   );
 }
