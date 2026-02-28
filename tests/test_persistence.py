@@ -24,7 +24,7 @@ def setup_function():
 
 
 def test_auto_naming_and_persistence(monkeypatch):
-    app = create_app()
+    app = create_app(run_migrations=False)
     app.config['TESTING'] = True
 
     # Start with a clean server-side state
@@ -81,7 +81,7 @@ def test_auto_naming_and_persistence(monkeypatch):
 
 
 def test_explicit_chat_creation_persists_name():
-    app = create_app()
+    app = create_app(run_migrations=False)
     app.config['TESTING'] = True
     client = app.test_client()
 
@@ -101,7 +101,7 @@ def test_explicit_chat_creation_persists_name():
 
 
 def test_update_chat_metadata():
-    app = create_app()
+    app = create_app(run_migrations=False)
     app.config['TESTING'] = True
     client = app.test_client()
 

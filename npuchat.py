@@ -2,6 +2,7 @@ import os
 
 from flasgger import Swagger
 from flask import Flask, request, send_from_directory
+from flask_migrate import Migrate, upgrade
 
 from blueprints.chats import chats_bp
 from blueprints.search import search_bp
@@ -11,16 +12,23 @@ from jsonapi import jsonapi_error_response
 from models import db
 from services import TemplateService
 
+migrate = Migrate()
 
-def create_app():
+
+def create_app(run_migrations=True):
     app = Flask(__name__)
     config = Config()
     app.config.from_object(config)
 
     db.init_app(app)
+    migrate.init_app(app, db, render_as_batch=True)
 
     with app.app_context():
-        db.create_all()
+        migrations_dir = os.path.join(app.root_path, 'migrations')
+        if run_migrations and os.path.isdir(migrations_dir):
+            upgrade()
+        else:
+            db.create_all()
         TemplateService.load_templates()
 
     app.config['SWAGGER'] = {

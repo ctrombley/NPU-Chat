@@ -1,6 +1,6 @@
 # Makefile for NPU Chat project
 
-.PHONY: help test lint lint-fix build-frontend lint-frontend test-frontend run all install install-test clean
+.PHONY: help test lint lint-fix build-frontend lint-frontend test-frontend run all install install-test clean db-migrate db-upgrade db-downgrade db-history db-stamp
 
 help: ## Show this help message
 	@echo "Available targets:"
@@ -36,6 +36,21 @@ run: ## Run the Flask application
 	python3 npuchat.py
 
 all: lint lint-frontend test test-frontend ## Run all linting and tests
+
+db-migrate: ## Generate a new migration (usage: make db-migrate msg="add column")
+	flask db migrate -m "$(msg)"
+
+db-upgrade: ## Apply pending migrations
+	flask db upgrade
+
+db-downgrade: ## Revert last migration
+	flask db downgrade
+
+db-history: ## Show migration history
+	flask db history
+
+db-stamp: ## Stamp DB with current head (usage: make db-stamp rev=head)
+	flask db stamp $(or $(rev),head)
 
 clean: ## Clean build artifacts
 	rm -rf static/dist

@@ -36,7 +36,7 @@ def test_context_persistence_and_autoname(monkeypatch):
       - the second LLM invocation receives the previous assistant reply in its `input_str` (i.e. context was prepended)
     """
 
-    app = create_app()
+    app = create_app(run_migrations=False)
     app.config['TESTING'] = True
 
     # Start with a clean server-side state

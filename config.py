@@ -26,5 +26,6 @@ class Config:
         self.CONTEXT_DEPTH = max(2, raw_context_depth)
 
         # Database
-        self.SQLALCHEMY_DATABASE_URI = f"sqlite:///{os.path.join(script_dir, 'data', 'chats.db')}"
+        default_db = f"sqlite:///{os.path.join(script_dir, 'data', 'chats.db')}"
+        self.SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', default_db)
         self.SQLALCHEMY_TRACK_MODIFICATIONS = False

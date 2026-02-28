@@ -45,7 +45,7 @@ def client():
     """
     Pytest fixture to provide a Flask test client.
     """
-    app = create_app()
+    app = create_app(run_migrations=False)
     app.config['TESTING'] = True
     with app.test_client() as client:
         yield client

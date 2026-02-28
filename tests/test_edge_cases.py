@@ -7,7 +7,7 @@ from npuchat import create_app
 
 def test_empty_input():
     """Test for empty input"""
-    app = create_app()
+    app = create_app(run_migrations=False)
     app.config['TESTING'] = True
     client = app.test_client()
 
@@ -24,7 +24,7 @@ def test_empty_input():
 
 def test_whitespace_only_input():
     """Test for whitespace-only input"""
-    app = create_app()
+    app = create_app(run_migrations=False)
     app.config['TESTING'] = True
     client = app.test_client()
 
@@ -41,7 +41,7 @@ def test_whitespace_only_input():
 
 def test_missing_request_body():
     """Test for missing request body"""
-    app = create_app()
+    app = create_app(run_migrations=False)
     app.config['TESTING'] = True
     client = app.test_client()
 

@@ -38,7 +38,7 @@ def setup_function():
 
 @pytest.fixture(scope='session', autouse=True)
 def server():
-    app = create_app()
+    app = create_app(run_migrations=False)
     def run_app():
         app.run(host=BINDING_ADDRESS, port=BINDING_PORT, debug=False, use_reloader=False)
     server_thread = threading.Thread(target=run_app)

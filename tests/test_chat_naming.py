@@ -9,7 +9,7 @@ from npuchat import create_app
 
 def test_autonaming_on_new_search_session():
     """Verify that POSTing to /api/search without session_id creates a new Chat and attempts to auto-name it."""
-    app = create_app()
+    app = create_app(run_migrations=False)
     app.config['TESTING'] = True
     client = app.test_client()
 

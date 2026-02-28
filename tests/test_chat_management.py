@@ -17,7 +17,7 @@ class TestChatManagement:
 
     def setup_method(self):
         """Set up test fixtures before each test method"""
-        self.app = create_app()
+        self.app = create_app(run_migrations=False)
         self.app.config['TESTING'] = True
         self.client = self.app.test_client()
         with self.app.app_context():
