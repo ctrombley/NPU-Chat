@@ -15,7 +15,7 @@ class Chat(db.Model):
     is_favorite = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
-    messages = db.relationship('Message', backref='chat', lazy=True, order_by='Message.position')
+    messages = db.relationship('Message', backref='chat', lazy=True, cascade='all, delete-orphan', order_by='Message.position')
 
     def __init__(self, id, name, emoji='', template_id='default', needs_naming=False, is_favorite=False):
         self.id = id

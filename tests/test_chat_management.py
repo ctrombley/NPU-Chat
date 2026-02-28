@@ -110,6 +110,31 @@ class TestChatManagement:
         list_data = get_jsonapi_data(list_response)
         assert len(list_data) == 0
 
+    def test_delete_chat_with_messages(self, client):
+        """Test deleting a chat that has messages (cascade delete)"""
+        create_response = jsonapi_post(client, '/api/v1/chats', 'chats', {'name': 'Chat With Messages'})
+        chat_id = get_jsonapi_id(create_response)
+
+        # Add messages to the chat
+        from models import Chat, db
+        chat = db.session.get(Chat, chat_id)
+        chat.add_message('user', 'Hello')
+        chat.add_message('assistant', 'Hi there!')
+
+        # Verify messages exist
+        msg_response = client.get(f'/api/v1/chats/{chat_id}/messages')
+        msg_data = get_jsonapi_data(msg_response)
+        assert len(msg_data) == 2
+
+        # Delete should succeed even with messages
+        response = client.delete(f'/api/v1/chats/{chat_id}')
+        assert response.status_code == 204
+
+        # Verify chat is gone
+        list_response = client.get('/api/v1/chats')
+        list_data = get_jsonapi_data(list_response)
+        assert len(list_data) == 0
+
     def test_delete_chat_not_found(self, client):
         """Test deleting non-existent chat"""
         response = client.delete('/api/v1/chats/non-existent-chat')
