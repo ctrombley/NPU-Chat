@@ -163,63 +163,72 @@ class LLMService:
 
     @staticmethod
     def feed_the_llama_stream(query: str, prefix: str, postfix: str):
-        """Generator that yields chunks of the LLM response for SSE streaming."""
+        """Returns a generator that yields chunks of the LLM response for SSE streaming."""
+        # Capture config values now while still in the application context,
+        # since the returned generator will be iterated outside it during streaming.
         config = current_app.config
+        npu_address = config['NPU_ADDRESS']
+        npu_port = config['NPU_PORT']
+        connection_timeout = config['CONNECTION_TIMEOUT']
         json_data = LLMService._build_request(query, prefix, postfix)
-        headers = {'Content-Type': 'application/json'}
 
-        try:
-            resp = requests.post(
-                f"http://{config['NPU_ADDRESS']}:{config['NPU_PORT']}",
-                headers=headers,
-                json=json_data,
-                timeout=config['CONNECTION_TIMEOUT'],
-                stream=True,
-            )
-            resp.raise_for_status()
+        def _stream():
+            headers = {'Content-Type': 'application/json'}
 
-            # Try to consume as a chunked stream first
-            buffer = b""
-            got_chunks = False
-            for chunk in resp.iter_content(chunk_size=64):
-                if chunk:
-                    got_chunks = True
-                    buffer += chunk
-                    # Try to decode and yield partial text
+            try:
+                resp = requests.post(
+                    f"http://{npu_address}:{npu_port}",
+                    headers=headers,
+                    json=json_data,
+                    timeout=connection_timeout,
+                    stream=True,
+                )
+                resp.raise_for_status()
+
+                # Try to consume as a chunked stream first
+                buffer = b""
+                got_chunks = False
+                for chunk in resp.iter_content(chunk_size=64):
+                    if chunk:
+                        got_chunks = True
+                        buffer += chunk
+                        # Try to decode and yield partial text
+                        try:
+                            partial = buffer.decode('utf-8')
+                            yield partial
+                            buffer = b""
+                        except UnicodeDecodeError:
+                            # Incomplete multi-byte char, wait for more data
+                            continue
+
+                # If we got chunked data, flush any remaining buffer
+                if got_chunks and buffer:
                     try:
-                        partial = buffer.decode('utf-8')
-                        yield partial
-                        buffer = b""
-                    except UnicodeDecodeError:
-                        # Incomplete multi-byte char, wait for more data
-                        continue
+                        yield buffer.decode('utf-8', errors='replace')
+                    except Exception:
+                        pass
+                    return
 
-            # If we got chunked data, flush any remaining buffer
-            if got_chunks and buffer:
-                try:
-                    yield buffer.decode('utf-8', errors='replace')
-                except Exception:
-                    pass
-                return
+                # If iter_content gave us the full response at once (no chunking),
+                # parse JSON and yield the content in small pieces
+                if not got_chunks:
+                    full_text = resp.text
+                    try:
+                        resp_json = resp.json()
+                        full_text = resp_json.get('content', full_text)
+                    except (ValueError, KeyError):
+                        pass
+                    # Yield word-by-word for a typing effect
+                    words = full_text.split(' ')
+                    for i, word in enumerate(words):
+                        yield word + (' ' if i < len(words) - 1 else '')
 
-            # If iter_content gave us the full response at once (no chunking),
-            # parse JSON and yield the content in small pieces
-            if not got_chunks:
-                full_text = resp.text
-                try:
-                    resp_json = resp.json()
-                    full_text = resp_json.get('content', full_text)
-                except (ValueError, KeyError):
-                    pass
-                # Yield word-by-word for a typing effect
-                words = full_text.split(' ')
-                for i, word in enumerate(words):
-                    yield word + (' ' if i < len(words) - 1 else '')
+            except Timeout:
+                yield "Request timed out. Please try again later."
+            except requests.exceptions.RequestException as e:
+                yield f"An error occurred: {str(e)} ---- is the server online?"
 
-        except Timeout:
-            yield "Request timed out. Please try again later."
-        except requests.exceptions.RequestException as e:
-            yield f"An error occurred: {str(e)} ---- is the server online?"
+        return _stream()
 
 class NamingService:
     @staticmethod

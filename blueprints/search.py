@@ -150,15 +150,20 @@ def search_stream():
     prefix = template.prefix
     postfix = template.postfix
 
+    # Capture app and stream eagerly (while still in app context)
+    # since the generator will be iterated outside it during streaming.
+    app = current_app._get_current_object()
+    stream = LLMService.feed_the_llama_stream(query, prefix, postfix)
+
     def generate():
         full_response = []
-        for chunk in LLMService.feed_the_llama_stream(query, prefix, postfix):
+        for chunk in stream:
             full_response.append(chunk)
             yield f"data: {json.dumps({'session_id': chat_id, 'chunk': chunk})}\n\n"
 
         # Save the complete response
         complete_text = ''.join(full_response)
-        with current_app.app_context():
+        with app.app_context():
             c = ChatService.get_chat(chat_id)
             if c:
                 c.add_message('assistant', complete_text)

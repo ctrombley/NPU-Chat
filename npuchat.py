@@ -2,7 +2,7 @@ import os
 
 from dotenv import load_dotenv
 from flasgger import Swagger
-from flask import Flask, redirect, request, send_from_directory
+from flask import Flask, abort, redirect, request, send_from_directory
 from flask_migrate import Migrate, upgrade
 
 from blueprints.chats import chats_bp
@@ -61,6 +61,8 @@ def create_app(run_migrations=True):
     @app.route('/api/<path:path>', methods=['GET', 'POST', 'PATCH', 'PUT', 'DELETE'])
     def api_v1_redirect(path):
         """Backward-compatible redirect from /api/* to /api/v1/*."""
+        if path.startswith('v1/') or path == 'v1':
+            abort(404)
         return redirect(f'/api/v1/{path}', code=308)
 
     @app.after_request
