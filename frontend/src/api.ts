@@ -104,9 +104,17 @@ export async function getChatMessages(chatId: string): Promise<Message[]> {
   }));
 }
 
-export async function reviewChatMetadata(chatId: string): Promise<void> {
-  const response = await apiFetch(`/api/v1/chats/${chatId}/review-metadata`, { method: 'POST' });
-  if (!response.ok) throw new Error('Failed to review chat metadata');
+export async function reviewChatMetadata(chatId: string, userMessage?: string): Promise<ChatUpdate | null> {
+  const body = userMessage !== undefined ? JSON.stringify({ user_message: userMessage }) : undefined;
+  const response = await apiFetch(`/api/v1/chats/${chatId}/review-metadata`, { method: 'POST', body });
+  if (!response.ok) return null;
+  const doc: JsonApiDocument<ChatAttributes> = await response.json();
+  const resource = Array.isArray(doc.data) ? doc.data[0] : doc.data;
+  return {
+    name: resource.attributes.name,
+    emoji: resource.attributes.emoji || '',
+    metadata: resource.attributes.metadata || {},
+  };
 }
 
 // --- Templates ---
@@ -208,6 +216,7 @@ export async function sendMessageStream(
   const decoder = new TextDecoder();
   let buffer = '';
 
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;

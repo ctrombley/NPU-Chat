@@ -155,14 +155,13 @@ def search_stream():
             full_response.append(chunk)
             yield f"data: {json.dumps({'session_id': chat_id, 'chunk': chunk})}\n\n"
 
-        # Save the complete response and update chat metadata before signalling done
+        # Save the complete response and signal done
         complete_text = ''.join(full_response)
         chat_update = None
         with app.app_context():
             c = ChatService.get_chat(chat_id)
             if c:
                 c.add_message('assistant', complete_text)
-                LLMService.review_chat_metadata(c)
                 chat_update = {
                     'name': c.name,
                     'emoji': c.emoji or '',

@@ -15,8 +15,8 @@ interface TemplatesProps {
   onNewChatWithTemplate?: (templateId: string) => void;
 }
 
-const inputClass = "w-full px-3 py-2 bg-tn-bg-dark text-tn-fg border border-tn-border rounded text-sm focus:outline-none focus:ring-1 focus:ring-tn-blue placeholder:text-tn-comment";
-const textareaClass = "w-full px-3 py-2 bg-tn-bg-dark text-tn-fg border border-tn-border rounded text-sm resize-y min-h-[80px] focus:outline-none focus:ring-1 focus:ring-tn-blue placeholder:text-tn-comment font-mono";
+const inputClass = "w-full px-3 py-2 bg-theme-bg text-theme-fg border border-theme-border rounded text-sm focus:outline-none focus:ring-1 focus:ring-theme-active placeholder:text-theme-fg-muted";
+const textareaClass = "w-full px-3 py-2 bg-theme-bg text-theme-fg border border-theme-border rounded text-sm resize-y min-h-[80px] focus:outline-none focus:ring-1 focus:ring-theme-active placeholder:text-theme-fg-muted font-mono";
 
 const Templates: React.FC<TemplatesProps> = ({ onClose, onNewChatWithTemplate }) => {
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -116,9 +116,9 @@ const Templates: React.FC<TemplatesProps> = ({ onClose, onNewChatWithTemplate })
     onCancel: () => void,
     saveLabel: string,
   ) => (
-    <div className="space-y-4 p-4 bg-tn-bg-highlight rounded-lg">
+    <div className="space-y-4 p-4 bg-theme-highlight rounded-lg">
       <div>
-        <label className="block text-xs text-tn-comment mb-1.5 uppercase tracking-wider">Name</label>
+        <label className="block text-xs text-theme-fg-muted mb-1.5 uppercase tracking-wider">Name</label>
         <input
           type="text"
           value={values.name}
@@ -129,7 +129,7 @@ const Templates: React.FC<TemplatesProps> = ({ onClose, onNewChatWithTemplate })
         />
       </div>
       <div>
-        <label className="block text-xs text-tn-comment mb-1.5 uppercase tracking-wider">Prefix</label>
+        <label className="block text-xs text-theme-fg-muted mb-1.5 uppercase tracking-wider">Prefix</label>
         <textarea
           value={values.prefix}
           onChange={(e) => onChange('prefix', e.target.value)}
@@ -138,7 +138,7 @@ const Templates: React.FC<TemplatesProps> = ({ onClose, onNewChatWithTemplate })
         />
       </div>
       <div>
-        <label className="block text-xs text-tn-comment mb-1.5 uppercase tracking-wider">Postfix</label>
+        <label className="block text-xs text-theme-fg-muted mb-1.5 uppercase tracking-wider">Postfix</label>
         <textarea
           value={values.postfix}
           onChange={(e) => onChange('postfix', e.target.value)}
@@ -156,12 +156,12 @@ const Templates: React.FC<TemplatesProps> = ({ onClose, onNewChatWithTemplate })
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-tn-bg border border-tn-border rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-tn-border">
-          <h2 className="text-lg font-medium text-tn-fg">Templates</h2>
+      <div className="relative bg-theme-bg border border-theme-border rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-theme-border">
+          <h2 className="text-lg font-medium text-theme-fg">Templates</h2>
           <button
             onClick={onClose}
-            className="text-tn-comment hover:text-tn-fg text-xl bg-transparent border-none cursor-pointer p-1"
+            className="text-theme-fg-muted hover:text-theme-fg text-xl bg-transparent border-none cursor-pointer p-1"
             aria-label="Close"
           >
             ×
@@ -170,12 +170,12 @@ const Templates: React.FC<TemplatesProps> = ({ onClose, onNewChatWithTemplate })
 
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {isLoading && (
-            <div className="text-center py-4 text-tn-comment">Loading...</div>
+            <div className="text-center py-4 text-theme-fg-muted">Loading...</div>
           )}
 
           {editing && (
             <div>
-              <h3 className="text-sm text-tn-fg-dark mb-3">Editing: {editing.name}</h3>
+              <h3 className="text-sm text-theme-fg mb-3">Editing: {editing.name}</h3>
               {renderForm(
                 editing,
                 (field, value) => setEditing({ ...editing, [field]: value }),
@@ -191,11 +191,11 @@ const Templates: React.FC<TemplatesProps> = ({ onClose, onNewChatWithTemplate })
               {templates.map((template) => (
                 <div
                   key={template.id}
-                  className="flex items-center justify-between p-3 bg-tn-bg-highlight rounded-lg hover:bg-tn-selection transition-colors"
+                  className="flex items-center justify-between p-3 bg-theme-highlight rounded-lg hover:bg-theme-active-bg transition-colors"
                 >
                   <div className="flex-1 min-w-0 mr-4">
-                    <div className="text-sm font-medium text-tn-fg">{template.name}</div>
-                    <div className="text-xs text-tn-comment mt-1 truncate">
+                    <div className="text-sm font-medium text-theme-fg">{template.name}</div>
+                    <div className="text-xs text-theme-fg-muted mt-1 truncate">
                       {template.prefix.substring(0, 80)}{template.prefix.length > 80 ? '...' : ''}
                     </div>
                   </div>
@@ -229,7 +229,7 @@ const Templates: React.FC<TemplatesProps> = ({ onClose, onNewChatWithTemplate })
                     <Button
                       variant="secondary"
                       size="compact"
-                      className={`px-3 py-1 ${confirmingDeleteId === template.id ? 'text-tn-red' : ''}`}
+                      className={`px-3 py-1 ${confirmingDeleteId === template.id ? 'text-red-400' : ''}`}
                       onClick={() => handleDelete(template.id)}
                     >
                       {confirmingDeleteId === template.id ? 'Confirm?' : 'Delete'}
@@ -249,7 +249,7 @@ const Templates: React.FC<TemplatesProps> = ({ onClose, onNewChatWithTemplate })
           )}
         </div>
 
-        <div className="flex gap-2 px-6 py-4 border-t border-tn-border">
+        <div className="flex gap-2 px-6 py-4 border-t border-theme-border">
           {!isCreating && !editing && (
             <Button
               variant="primary"

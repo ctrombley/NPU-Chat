@@ -25,18 +25,18 @@ describe('ChatMessages', () => {
     render(<ChatMessages messages={[mockMessages[0]]} />);
 
     const messageDiv = screen.getByText('Hello world').closest('div');
-    expect(messageDiv).toHaveClass('bg-message-sent');
-    expect(messageDiv).toHaveClass('rounded-tl-3xl');
-    expect(messageDiv).toHaveClass('rounded-bl-3xl');
+    expect(messageDiv).toHaveClass('bg-theme-bubble-sent');
+    expect(messageDiv).toHaveClass('rounded-2xl');
+    expect(messageDiv).toHaveClass('rounded-br-sm');
   });
 
   it('renders received messages with correct styling', () => {
     render(<ChatMessages messages={[mockMessages[1]]} />);
 
     const messageDiv = screen.getByText('Hi there!').closest('div');
-    expect(messageDiv).toHaveClass('bg-message-received');
-    expect(messageDiv).toHaveClass('rounded-tr-3xl');
-    expect(messageDiv).toHaveClass('rounded-br-3xl');
+    expect(messageDiv).toHaveClass('bg-theme-bubble-received');
+    expect(messageDiv).toHaveClass('rounded-2xl');
+    expect(messageDiv).toHaveClass('rounded-bl-sm');
   });
 
   it('renders md-tagged content as safe plain text', () => {

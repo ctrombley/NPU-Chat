@@ -53,7 +53,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
   const isDisabled = !currentChatId || isLoading;
 
   return (
-    <form onSubmit={handleSubmit} aria-label="Message form" className="fixed bottom-0 right-0 bg-tn-bg/80 backdrop-blur-sm p-2.5 flex z-20 max-h-48 overflow-hidden" style={{ left: 'var(--sidebar-width, 192px)' }}>
+    <form onSubmit={handleSubmit} aria-label="Message form" className="fixed bottom-0 right-0 bg-theme-bg/80 backdrop-blur-sm p-2.5 flex z-20 max-h-48 overflow-hidden" style={{ left: 'var(--sidebar-width, 192px)' }}>
       <div className="message-input-container flex flex-1">
         <label htmlFor="message-input" className="sr-only">
           Type your message
@@ -65,7 +65,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
           value={inputText}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          className="flex-1 p-4 box-border border border-tn-border rounded-3xl resize-none overflow-y-hidden bg-tn-bg-dark text-tn-fg text-base mr-2.5 max-h-40 focus:outline-none focus:ring-2 focus:ring-tn-blue focus:border-tn-blue placeholder:text-tn-comment"
+          className="flex-1 p-4 box-border border border-theme-border rounded-3xl resize-none overflow-y-hidden bg-theme-bg text-theme-fg text-base mr-2.5 max-h-40 focus:outline-none focus:ring-2 focus:ring-theme-active focus:border-theme-active placeholder:text-theme-fg-muted"
           placeholder={currentChatId ? "Chat..." : "Select a chat to start messaging"}
           disabled={isDisabled}
           aria-disabled={isDisabled}

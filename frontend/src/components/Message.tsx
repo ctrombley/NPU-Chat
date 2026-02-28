@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Message as MessageType } from '../types';
 import { MessageBubble } from './ui/MessageBubble';
+import TypingIndicator from './TypingIndicator';
 
 interface MessageProps {
   message: MessageType;
@@ -24,10 +25,14 @@ const Message: React.FC<MessageProps> = ({ message }) => {
 
   return (
     <MessageBubble variant={message.type === 'sent' ? 'sent' : 'received'}>
-      <p className="m-0 p-0">{getCleanText(message.text)}</p>
-      {message.type === 'received' && (
+      {message.isTyping ? (
+        <TypingIndicator />
+      ) : (
+        <p className="m-0 p-0">{getCleanText(message.text)}</p>
+      )}
+      {message.type === 'received' && !message.isTyping && (
         <button
-          className={`absolute top-2 right-2 bg-tn-bg-highlight text-tn-comment text-sm font-bold font-sans no-underline border border-tn-border rounded shadow-lg transition-all w-8 h-8 leading-5 text-center hover:text-tn-fg opacity-0 group-hover:opacity-100 ${
+          className={`absolute top-2 right-2 bg-theme-highlight text-theme-fg-muted text-sm font-bold font-sans no-underline border border-theme-border rounded shadow-lg transition-all w-8 h-8 leading-5 text-center hover:text-theme-fg opacity-0 group-hover:opacity-100 ${
             copyFeedback ? 'opacity-100' : ''
           }`}
           onClick={handleCopy}

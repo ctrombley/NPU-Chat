@@ -6,7 +6,7 @@ import { createMockTemplate } from '../test-utils';
 global.fetch = jest.fn();
 
 // JSON:API helper to wrap a collection
-const jsonapiCollection = (type: string, items: { id: string; [key: string]: any }[]) => ({
+const jsonapiCollection = (type: string, items: { id: string; [key: string]: unknown }[]) => ({
   data: items.map(({ id, ...attrs }) => ({ type, id, attributes: attrs })),
 });
 

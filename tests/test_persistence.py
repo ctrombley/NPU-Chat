@@ -11,17 +11,14 @@ from models import Chat, Message, db
 from npuchat import create_app
 
 
-def test_auto_naming_and_persistence(client, monkeypatch):
-    # Monkeypatch feed_the_llama to return predictable assistant response and naming JSON
-    responses = [
-        "This is the assistant reply.",
-        json.dumps({"name": "Quick Help", "emoji": "\u26a1"})
-    ]
+def test_message_persistence(client, monkeypatch):
+    """Verify that user and assistant messages are saved after a /search call.
 
+    Metadata review (naming/emoji) is a separate frontend-initiated shadow request
+    to POST /api/v1/chats/{id}/review-metadata and is not triggered by /search.
+    """
     def fake_feed(query, prefix, postfix):
-        if responses:
-            return responses.pop(0)
-        return ""
+        return "This is the assistant reply."
 
     monkeypatch.setattr('services.LLMService.feed_the_llama', fake_feed)
 
@@ -34,13 +31,10 @@ def test_auto_naming_and_persistence(client, monkeypatch):
     body = json.loads(resp.data)
     session_id = body['data']['attributes']['session_id']
 
-    # Verify data using SQLAlchemy
     app = client.application
     with app.app_context():
         chat = db.session.get(Chat, session_id)
         assert chat is not None
-        assert chat.name == 'Quick Help'
-        assert chat.emoji == '\u26a1'
 
         # Check messages exist
         msgs = Message.query.filter_by(chat_id=session_id).order_by(Message.position).all()

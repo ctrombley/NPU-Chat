@@ -1,99 +1,147 @@
+"""Tests for chat metadata review via the review-metadata endpoint."""
 import json
 from unittest.mock import patch
 
-from conftest import JSONAPI_CONTENT_TYPE, jsonapi_post, get_jsonapi_id
+from conftest import JSONAPI_CONTENT_TYPE, get_jsonapi_id, jsonapi_post
 
 from models import Chat, db
 
 
-def test_autonaming_on_new_search_session(client):
-    """Verify that POSTing to /api/v1/search without session_id creates a new Chat and attempts to auto-name it."""
-    app = client.application
+class MockLLMResp:
+    def __init__(self, json_data, status_code=200):
+        self._json = json_data
+        self.status_code = status_code
+        self.text = json.dumps(json_data)
 
-    # Mock feed_the_llama responses: first call is the content reply, second call is naming JSON
-    naming_json = json.dumps({'name': 'Summary', 'emoji': '\U0001f4dd'})
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise Exception('HTTP error')
 
-    # Patch requests.post used inside feed_the_llama to return controlled responses
-    class MockResp:
-        def __init__(self, json_data, status_code=200):
-            self._json = json_data
-            self.status_code = status_code
+    def json(self):
+        return self._json
 
-        def raise_for_status(self):
-            if self.status_code >= 400:
-                raise Exception('HTTP error')
-
-        def json(self):
-            return self._json
-
-    def side_effect_post(url, headers=None, json=None, timeout=None):
-        # Distinguish between regular LLM response and naming prompt by checking the input_str
-        input_str = json.get('input_str', '') if isinstance(json, dict) else ''
-        if 'Please provide a very short' in input_str:
-            return MockResp({'content': naming_json})
-        else:
-            return MockResp({'content': 'LLM normal reply'})
-
-    with patch('requests.post', side_effect=side_effect_post):
-        response = client.post(
-            '/api/v1/search',
-            data=json.dumps({'data': {'type': 'search-requests', 'attributes': {'input_text': 'Hello'}}}),
-            content_type=JSONAPI_CONTENT_TYPE,
-        )
-
-    assert response.status_code == 200
-    body = json.loads(response.data)
-    assert 'data' in body
-    assert body['data']['attributes']['content']
-
-    # There should be exactly one chat created
-    with app.app_context():
-        chats = Chat.query.all()
-        assert len(chats) == 1
-        chat = chats[0]
-        # The chat should have been renamed to include the emoji and name from naming_json
-        assert chat.name.startswith('\U0001f4dd') or 'Summary' in chat.name
-        assert chat.needs_naming is False
+    def iter_content(self, chunk_size=None):
+        return iter([])
 
 
-def test_autonaming_on_streaming_search(client):
-    """Verify that POSTing to /api/v1/search/stream triggers auto-naming on a new chat."""
-    app = client.application
+def make_llm_mock(metadata_response, normal_response='LLM normal reply'):
+    """Build a requests.post side-effect that returns metadata_response for metadata
+    prompts (identified by the metadata assistant system prompt) and normal_response otherwise."""
+    metadata_content = json.dumps(metadata_response)
 
-    # 1. Create a chat with no name (needs_naming=True)
+    def side_effect(url, headers=None, json=None, timeout=None, stream=False):
+        prefix = (json or {}).get('PROMPT_TEXT_PREFIX', '')
+        if 'metadata assistant' in prefix:
+            return MockLLMResp({'content': metadata_content})
+        return MockLLMResp({'content': normal_response})
+
+    return side_effect
+
+
+def test_review_metadata_endpoint_updates_name_and_emoji(client):
+    """POST /api/v1/chats/{id}/review-metadata calls LLM and updates name/emoji in DB."""
     resp = jsonapi_post(client, '/api/v1/chats', 'chats', {})
     assert resp.status_code == 201
     chat_id = get_jsonapi_id(resp)
 
-    naming_json = json.dumps({'name': 'Streamed Topic', 'emoji': '\U0001f680'})
+    with patch('requests.post', side_effect=make_llm_mock({'name': 'Python Help', 'emoji': '🐍', 'theme': 'Python debugging'})):
+        response = client.post(
+            f'/api/v1/chats/{chat_id}/review-metadata',
+            data=json.dumps({'user_message': 'How do I fix this Python bug?'}),
+            content_type='application/json',
+        )
 
-    class MockResp:
-        def __init__(self, json_data, status_code=200):
-            self._json = json_data
-            self.status_code = status_code
-            self.text = json.dumps(json_data)
+    assert response.status_code == 200
+    body = json.loads(response.data)
+    assert body['data']['attributes']['name'] == 'Python Help'
+    assert body['data']['attributes']['emoji'] == '🐍'
 
-        def raise_for_status(self):
-            pass
+    with client.application.app_context():
+        chat = db.session.get(Chat, chat_id)
+        assert chat.name == 'Python Help'
+        assert chat.emoji == '🐍'
 
-        def json(self):
-            return self._json
 
-        def iter_content(self, chunk_size=None):
-            # Return empty iterator so streaming falls through to resp.json() path
-            return iter([])
+def test_review_metadata_endpoint_uses_user_message_from_body(client):
+    """POST body user_message is passed to LLM, not DB messages."""
+    resp = jsonapi_post(client, '/api/v1/chats', 'chats', {'name': 'Chat 1'})
+    chat_id = get_jsonapi_id(resp)
 
-    def side_effect_post(url, headers=None, json=None, timeout=None, stream=False):
-        input_str = json.get('input_str', '') if isinstance(json, dict) else ''
-        if 'Please provide a very short' in input_str:
-            return MockResp({'content': naming_json})
-        else:
-            return MockResp({'content': 'Streamed LLM reply'})
+    captured_queries = []
 
-    # 2. Send message via streaming endpoint
-    # The patch must stay active through get_data() because the streaming
-    # generator (including the naming call) runs lazily when the response is consumed.
-    with patch('requests.post', side_effect=side_effect_post):
+    def capture_side_effect(url, headers=None, json=None, timeout=None, stream=False):
+        prefix = (json or {}).get('PROMPT_TEXT_PREFIX', '')
+        if 'metadata assistant' in prefix:
+            captured_queries.append((json or {}).get('input_str', ''))
+            return MockLLMResp({'content': '{"name": "JS Help", "emoji": "🟨", "theme": "JavaScript questions"}'})
+        return MockLLMResp({'content': 'reply'})
+
+    with patch('requests.post', side_effect=capture_side_effect):
+        client.post(
+            f'/api/v1/chats/{chat_id}/review-metadata',
+            data=json.dumps({'user_message': 'What is a JavaScript closure?'}),
+            content_type='application/json',
+        )
+
+    assert len(captured_queries) == 1
+    assert 'What is a JavaScript closure?' in captured_queries[0]
+
+
+def test_review_metadata_endpoint_not_found(client):
+    """POST to review-metadata for non-existent chat returns 404."""
+    response = client.post(
+        '/api/v1/chats/does-not-exist/review-metadata',
+        data=json.dumps({}),
+        content_type='application/json',
+    )
+    assert response.status_code == 404
+
+
+def test_review_metadata_returns_existing_data_when_review_disabled(client):
+    """When METADATA_REVIEW_ENABLED is False, endpoint returns current chat data without calling LLM."""
+    resp = jsonapi_post(client, '/api/v1/chats', 'chats', {'name': 'Original'})
+    chat_id = get_jsonapi_id(resp)
+
+    client.application.config['METADATA_REVIEW_ENABLED'] = False
+    try:
+        call_count = 0
+
+        def should_not_call(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return MockLLMResp({'content': '{}'})
+
+        with patch('requests.post', side_effect=should_not_call):
+            response = client.post(
+                f'/api/v1/chats/{chat_id}/review-metadata',
+                data=json.dumps({'user_message': 'hello'}),
+                content_type='application/json',
+            )
+
+        assert response.status_code == 200
+        body = json.loads(response.data)
+        assert body['data']['attributes']['name'] == 'Original'
+        assert call_count == 0
+    finally:
+        client.application.config['METADATA_REVIEW_ENABLED'] = True
+
+
+def test_search_stream_does_not_call_metadata_review(client):
+    """Streaming endpoint no longer performs metadata review itself."""
+    resp = jsonapi_post(client, '/api/v1/chats', 'chats', {})
+    chat_id = get_jsonapi_id(resp)
+
+    metadata_call_count = 0
+
+    def track_calls(url, headers=None, json=None, timeout=None, stream=False):
+        nonlocal metadata_call_count
+        prefix = (json or {}).get('PROMPT_TEXT_PREFIX', '')
+        if 'metadata assistant' in prefix:
+            metadata_call_count += 1
+            return MockLLMResp({'content': '{}'})
+        return MockLLMResp({'content': 'stream reply'})
+
+    with patch('requests.post', side_effect=track_calls):
         response = client.post(
             '/api/v1/search/stream',
             data=json.dumps({'data': {'type': 'search-requests', 'attributes': {
@@ -102,17 +150,10 @@ def test_autonaming_on_streaming_search(client):
             }}}),
             content_type=JSONAPI_CONTENT_TYPE,
         )
-
         assert response.status_code == 200
+        response.get_data(as_text=True)
 
-        # 3. Consume the SSE stream (must be inside patch context)
-        stream_data = response.get_data(as_text=True)
-        assert 'done' in stream_data
-
-    # 4. Verify auto-naming happened
-    with app.app_context():
-        chat = db.session.get(Chat, chat_id)
-        assert chat is not None
-        assert chat.name == 'Streamed Topic'
-        assert chat.emoji == '\U0001f680'
-        assert chat.needs_naming is False
+    assert metadata_call_count == 0, (
+        'search/stream should not call metadata review; '
+        'the frontend fires that separately'
+    )

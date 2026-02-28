@@ -18,26 +18,22 @@ class MockResponse:
         return None
 
 
-def test_context_persistence_and_autoname(client, monkeypatch):
-    """Verify that assistant replies are preserved in server-side context across messages
-
-    We mock requests.post to simulate the NPU/LLM. The sequence of mocked responses is:
-      1) assistant reply to the user's first question
-      2) a JSON string suggesting a name+emoji for the chat
-      3) assistant reply to the follow-up question
+def test_context_persistence(client, monkeypatch):
+    """Verify that assistant replies are preserved in server-side context across messages.
 
     The test asserts that:
       - a session_id is returned and a Chat object is created
       - the chat.messages contains both the user and assistant entries after the first call
-      - the auto-naming step updates the chat.name when valid JSON is returned
-      - the second LLM invocation receives the previous assistant reply in its `input_str` (i.e. context was prepended)
+      - the second LLM invocation receives the previous assistant reply in its `input_str` (context was prepended)
+
+    Note: metadata review (naming/emoji) is a separate frontend-initiated shadow request;
+    the /search endpoint does not perform it.
     """
     app = client.application
 
-    # Prepare mocked responses for the sequence of LLM calls
+    # Prepare mocked responses: first message reply, then follow-up reply
     responses = [
         {"content": "Okay, this chat is about apples. Let me know how I can help you explore the topic!"},
-        {"content": json.dumps({"name": "Apple Chat", "emoji": "\U0001f34e"})},
         {"content": "This chat is about apples."},
     ]
 
@@ -67,13 +63,8 @@ def test_context_persistence_and_autoname(client, monkeypatch):
         chat = db.session.get(Chat, session_id)
         assert chat is not None
         messages = ChatService.get_chat_messages(session_id) or []
-        # Messages now have role column instead of prefixed content
         assert any(m.role == 'user' and 'This chat is about apples.' in m.content for m in messages), "User message not saved"
         assert any(m.role == 'assistant' and 'Okay, this chat is about apples.' in m.content for m in messages), "Assistant reply not saved"
-
-        # Auto-naming should have run and set a name (best-effort)
-        assert not chat.needs_naming
-        assert 'Apple' in chat.name or chat.name.startswith('\U0001f34e'), f"Unexpected chat name: {chat.name}"
 
     # 2) Follow-up message using the returned session_id
     rv2 = client.post(

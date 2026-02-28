@@ -3,6 +3,8 @@ import { Chat } from '../types';
 import ChatListItem from './ChatListItem';
 import { Sidebar } from './ui/Sidebar';
 import { Button } from './ui/Button';
+import ThemeToggle from './ThemeToggle';
+import { Theme } from '../hooks/useTheme';
 
 interface ChatListProps {
   chats: Chat[];
@@ -14,6 +16,8 @@ interface ChatListProps {
   onEditChat: (chatId: string) => void;
   onShowTemplates: () => void;
   sidebarWidth?: number;
+  theme: Theme;
+  onThemeChange: (theme: Theme) => void;
 }
 
 const ChatList: React.FC<ChatListProps> = ({
@@ -26,9 +30,15 @@ const ChatList: React.FC<ChatListProps> = ({
   onEditChat,
   onShowTemplates,
   sidebarWidth,
+  theme,
+  onThemeChange,
 }) => {
   return (
-    <Sidebar title="Chats" style={sidebarWidth ? { width: sidebarWidth } : undefined}>
+    <Sidebar
+      title="Chats"
+      style={sidebarWidth ? { width: sidebarWidth } : undefined}
+      footer={<ThemeToggle theme={theme} onThemeChange={onThemeChange} />}
+    >
       <ul className="list-none p-0 m-0">
         {chats.map((chat, index) => (
           <ChatListItem

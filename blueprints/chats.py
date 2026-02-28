@@ -261,7 +261,7 @@ def get_chat_messages(chat_id):
 
 @chats_bp.route('/chats/<chat_id>/review-metadata', methods=['POST'])
 def review_chat_metadata(chat_id):
-    """Trigger LLM metadata review for a chat (fire-and-forget).
+    """Trigger LLM metadata review for a chat and return updated chat data.
     ---
     tags:
       - chats
@@ -270,18 +270,32 @@ def review_chat_metadata(chat_id):
         name: chat_id
         type: string
         required: true
+    consumes:
+      - application/json
+    parameters:
+      - in: body
+        name: body
+        schema:
+          type: object
+          properties:
+            user_message:
+              type: string
+              description: The new user message to use as context for review
     responses:
-      204:
-        description: Review complete (or disabled)
+      200:
+        description: Updated chat data
       404:
         description: Chat not found
     """
-    if not current_app.config.get('METADATA_REVIEW_ENABLED', True):
-        return '', 204
-
     chat = ChatService.get_chat(chat_id)
     if not chat:
         return jsonapi_error_response(404, 'Not Found', 'Chat not found')
 
-    LLMService.review_chat_metadata(chat)
-    return '', 204
+    if current_app.config.get('METADATA_REVIEW_ENABLED', True):
+        body = request.get_json(force=True, silent=True) or {}
+        user_message = body.get('user_message') if isinstance(body, dict) else None
+        LLMService.review_chat_metadata(chat, user_message=user_message)
+
+    d = chat.to_dict()
+    chat_id_val = d.pop('id')
+    return jsonapi_response(serialize_resource('chats', chat_id_val, d))

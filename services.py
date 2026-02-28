@@ -248,31 +248,26 @@ class LLMService:
         return _stream()
 
     @staticmethod
-    def review_chat_metadata(chat: Chat) -> None:
+    def review_chat_metadata(chat: Chat, user_message: Optional[str] = None) -> None:
         """Silently review and update chat metadata using LLM. Fire-and-forget; errors are logged and ignored."""
         try:
-            # Find last user and assistant messages
-            messages = list(chat.messages)
-            last_user = next((m.content for m in reversed(messages) if m.role == 'user'), '')
-            last_assistant = next((m.content for m in reversed(messages) if m.role == 'assistant'), '')
+            # Use provided user_message or fall back to last user message in DB
+            last_user = user_message
+            if not last_user:
+                messages = list(chat.messages)
+                last_user = next((m.content for m in reversed(messages) if m.role == 'user'), '')
 
-            if not last_user and not last_assistant:
+            if not last_user:
                 return
 
-            query = f"""Current metadata:
-{json.dumps(chat.chat_metadata or {}, indent=2)}
+            query = f"""Metadata: {json.dumps(chat.chat_metadata or {}, indent=2)}
+New user message: {last_user}
 
-Latest exchange:
-User: {last_user}
-Assistant: {last_assistant}
-
-Instructions:
-- Return ONLY a JSON object with fields to update. No explanation, no markdown.
-- "name": short title (≤6 words). Update if still a default like "Chat N" or clearly wrong.
-- "emoji": single emoji. Update if empty or if a better one is obvious.
-- "theme": one sentence summary of what this chat is about. ALWAYS update this.
-- Add any other fields useful for tracking this conversation's context.
-- Example: {{"name": "Python async debugging", "emoji": "🐍", "theme": "Debugging async/await with SQLAlchemy."}}"""
+Return ONLY a JSON object. No explanation, no markdown.
+- "name": short title (≤6 words). Update if default ("Chat N") or clearly wrong.
+- "emoji": single emoji. Update if empty or a better one is obvious.
+- "theme": one sentence summary. ALWAYS update.
+Example: {{"name": "Python async debugging", "emoji": "🐍", "theme": "Debugging async/await with SQLAlchemy."}}"""
 
             prefix = "<|im_start|>system You are a concise chat metadata assistant. <|im_end|> <|im_start|>user "
             postfix = " <|im_end|><|im_start|>assistant "

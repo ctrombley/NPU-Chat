@@ -3,6 +3,7 @@ export interface Message {
   type: 'sent' | 'received';
   text: string;
   timestamp: number;
+  isTyping?: boolean;
 }
 
 export interface Chat {

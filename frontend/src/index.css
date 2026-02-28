@@ -11,6 +11,58 @@
     --color-accent: 122 162 247;
     --color-accent-hover: 125 207 255;
   }
+
+  /* Dark theme (default) */
+  :root, .theme-dark {
+    --theme-bg: 15 23 42;
+    --theme-sidebar: 10 15 30;
+    --theme-fg: 226 232 240;
+    --theme-fg-muted: 100 116 139;
+    --theme-border: 51 65 85;
+    --theme-highlight: 30 41 59;
+    --theme-active: 37 99 235;
+    --theme-active-bg: 23 37 84;
+    --theme-bubble-sent: 37 99 235;
+    --theme-bubble-sent-fg: 255 255 255;
+    --theme-bubble-received: 30 41 59;
+    --theme-bubble-received-fg: 226 232 240;
+    --theme-code-bg: 10 15 30;
+    --theme-scrollbar: 51 65 85;
+  }
+
+  .theme-light {
+    --theme-bg: 248 250 252;
+    --theme-sidebar: 241 245 249;
+    --theme-fg: 15 23 42;
+    --theme-fg-muted: 100 116 139;
+    --theme-border: 203 213 225;
+    --theme-highlight: 226 232 240;
+    --theme-active: 37 99 235;
+    --theme-active-bg: 219 234 254;
+    --theme-bubble-sent: 37 99 235;
+    --theme-bubble-sent-fg: 255 255 255;
+    --theme-bubble-received: 226 232 240;
+    --theme-bubble-received-fg: 15 23 42;
+    --theme-code-bg: 241 245 249;
+    --theme-scrollbar: 203 213 225;
+  }
+
+  .theme-solarized {
+    --theme-bg: 0 43 54;
+    --theme-sidebar: 7 54 66;
+    --theme-fg: 147 161 161;
+    --theme-fg-muted: 101 123 131;
+    --theme-border: 7 54 66;
+    --theme-highlight: 7 54 66;
+    --theme-active: 38 139 210;
+    --theme-active-bg: 7 54 66;
+    --theme-bubble-sent: 38 139 210;
+    --theme-bubble-sent-fg: 255 255 255;
+    --theme-bubble-received: 7 54 66;
+    --theme-bubble-received-fg: 147 161 161;
+    --theme-code-bg: 0 43 54;
+    --theme-scrollbar: 7 54 66;
+  }
 }
 
 /* Custom styles for markdown rendering */
@@ -18,10 +70,10 @@ code {
   @apply text-tn-green border-0;
 }
 pre {
-  @apply text-tn-fg p-2 border border-tn-border rounded-lg;
+  @apply text-theme-fg p-2 border border-theme-border rounded-lg;
 }
 code, pre {
-  @apply bg-tn-bg-dark;
+  background-color: rgb(var(--theme-code-bg));
 }
 
 a {
@@ -46,16 +98,16 @@ li::marker {
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1b26;
+  background-color: rgb(var(--theme-bg));
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #414868;
+  background-color: rgb(var(--theme-scrollbar));
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #565f89;
+  background-color: rgb(var(--theme-fg-muted));
 }
 
 /* Copy button animation */
@@ -87,8 +139,8 @@ li::marker {
 .loader {
   width: 24px;
   height: 24px;
-  border: 3px solid #414868;
-  border-top-color: #7aa2f7;
+  border: 3px solid rgb(var(--theme-border));
+  border-top-color: rgb(var(--theme-active));
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -104,6 +156,27 @@ li::marker {
 
 .resize-handle:hover,
 .resize-handle.active {
-  background: #7aa2f7;
+  background-color: rgb(var(--theme-active));
+}
+
+/* Typing indicator dots */
+.typing-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: rgb(var(--theme-bubble-received-fg) / 0.6);
+  animation: typing-bounce 1.2s ease-in-out infinite;
+}
+
+@keyframes typing-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
+  30% {
+    transform: translateY(-6px);
+    opacity: 1;
+  }
 }
 

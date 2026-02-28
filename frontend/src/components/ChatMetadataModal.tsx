@@ -11,9 +11,9 @@ interface ChatMetadataModalProps {
 
 type ViewMode = 'form' | 'json';
 
-const inputClass = "w-full px-3 py-2 bg-tn-bg-dark text-tn-fg border border-tn-border rounded text-sm focus:outline-none focus:ring-1 focus:ring-tn-blue placeholder:text-tn-comment";
-const textareaClass = "w-full px-3 py-2 bg-tn-bg-dark text-tn-fg border border-tn-border rounded text-sm resize-y min-h-[120px] focus:outline-none focus:ring-1 focus:ring-tn-blue placeholder:text-tn-comment font-mono";
-const selectClass = "w-full px-3 py-2 bg-tn-bg-dark text-tn-fg border border-tn-border rounded text-sm focus:outline-none focus:ring-1 focus:ring-tn-blue";
+const inputClass = "w-full px-3 py-2 bg-theme-bg text-theme-fg border border-theme-border rounded text-sm focus:outline-none focus:ring-1 focus:ring-theme-active placeholder:text-theme-fg-muted";
+const textareaClass = "w-full px-3 py-2 bg-theme-bg text-theme-fg border border-theme-border rounded text-sm resize-y min-h-[120px] focus:outline-none focus:ring-1 focus:ring-theme-active placeholder:text-theme-fg-muted font-mono";
+const selectClass = "w-full px-3 py-2 bg-theme-bg text-theme-fg border border-theme-border rounded text-sm focus:outline-none focus:ring-1 focus:ring-theme-active";
 
 const ChatMetadataModal: React.FC<ChatMetadataModalProps> = ({ chat, onSave, onClose }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('form');
@@ -66,19 +66,19 @@ const ChatMetadataModal: React.FC<ChatMetadataModalProps> = ({ chat, onSave, onC
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-tn-bg border border-tn-border rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-tn-border">
-          <h2 className="text-lg font-medium text-tn-fg">Edit Chat</h2>
+      <div className="relative bg-theme-bg border border-theme-border rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-theme-border">
+          <h2 className="text-lg font-medium text-theme-fg">Edit Chat</h2>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setViewMode(viewMode === 'form' ? 'json' : 'form')}
-              className="text-xs px-2 py-1 rounded bg-tn-bg-highlight text-tn-comment hover:text-tn-fg border border-tn-border cursor-pointer"
+              className="text-xs px-2 py-1 rounded bg-theme-highlight text-theme-fg-muted hover:text-theme-fg border border-theme-border cursor-pointer"
             >
               {viewMode === 'form' ? 'JSON' : 'Form'}
             </button>
             <button
               onClick={onClose}
-              className="text-tn-comment hover:text-tn-fg text-xl bg-transparent border-none cursor-pointer p-1"
+              className="text-theme-fg-muted hover:text-theme-fg text-xl bg-transparent border-none cursor-pointer p-1"
               aria-label="Close"
             >
               ×
@@ -90,7 +90,7 @@ const ChatMetadataModal: React.FC<ChatMetadataModalProps> = ({ chat, onSave, onC
           {viewMode === 'form' ? (
             <>
               <div>
-                <label className="block text-xs text-tn-comment mb-1.5 uppercase tracking-wider">Name</label>
+                <label className="block text-xs text-theme-fg-muted mb-1.5 uppercase tracking-wider">Name</label>
                 <input
                   type="text"
                   value={name}
@@ -101,7 +101,7 @@ const ChatMetadataModal: React.FC<ChatMetadataModalProps> = ({ chat, onSave, onC
                 />
               </div>
               <div>
-                <label className="block text-xs text-tn-comment mb-1.5 uppercase tracking-wider">Emoji</label>
+                <label className="block text-xs text-theme-fg-muted mb-1.5 uppercase tracking-wider">Emoji</label>
                 <input
                   type="text"
                   value={emoji}
@@ -111,7 +111,7 @@ const ChatMetadataModal: React.FC<ChatMetadataModalProps> = ({ chat, onSave, onC
                 />
               </div>
               <div>
-                <label className="block text-xs text-tn-comment mb-1.5 uppercase tracking-wider">Template</label>
+                <label className="block text-xs text-theme-fg-muted mb-1.5 uppercase tracking-wider">Template</label>
                 <select
                   value={templateId}
                   onChange={(e) => setTemplateId(e.target.value)}
@@ -124,8 +124,8 @@ const ChatMetadataModal: React.FC<ChatMetadataModalProps> = ({ chat, onSave, onC
               </div>
               {chat.metadata?.theme && (
                 <div>
-                  <label className="block text-xs text-tn-comment mb-1.5 uppercase tracking-wider">Theme</label>
-                  <p className="text-tn-comment text-sm italic">{String(chat.metadata.theme)}</p>
+                  <label className="block text-xs text-theme-fg-muted mb-1.5 uppercase tracking-wider">Theme</label>
+                  <p className="text-theme-fg-muted text-sm italic">{String(chat.metadata.theme)}</p>
                 </div>
               )}
             </>
@@ -137,13 +137,13 @@ const ChatMetadataModal: React.FC<ChatMetadataModalProps> = ({ chat, onSave, onC
                 className={textareaClass}
               />
               {jsonError && (
-                <div className="text-sm text-tn-red">{jsonError}</div>
+                <div className="text-sm text-red-400">{jsonError}</div>
               )}
             </>
           )}
         </div>
 
-        <div className="flex gap-2 px-6 py-4 border-t border-tn-border">
+        <div className="flex gap-2 px-6 py-4 border-t border-theme-border">
           <Button variant="primary" size="compact" className="px-4 py-1.5" onClick={handleSave}>
             Save
           </Button>

@@ -7,8 +7,9 @@ import ChatMetadataModal from './components/ChatMetadataModal';
 import { Message } from './types';
 import { useChats, useCreateChat, useDeleteChat, useToggleFavorite, useUpdateChat } from './hooks/useChats';
 import { useMessages } from './hooks/useMessages';
-import { sendMessageStream, ChatUpdate } from './api';
+import { sendMessageStream, reviewChatMetadata, ChatUpdate } from './api';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTheme } from './hooks/useTheme';
 
 function App() {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
@@ -20,6 +21,7 @@ function App() {
   const isResizing = useRef(false);
   const streamingTextRef = useRef('');
   const queryClient = useQueryClient();
+  const [theme, setTheme] = useTheme();
 
   const { data: chats = [] } = useChats();
   const { data: serverMessages = [] } = useMessages(currentChatId);
@@ -91,6 +93,7 @@ function App() {
   const handleDeleteChat = async (chatId: string) => {
     try {
       await deleteChatMutation.mutateAsync(chatId);
+      queryClient.removeQueries({ queryKey: ['messages', chatId] });
       if (currentChatId === chatId) {
         const remaining = chats.filter(c => c.id !== chatId);
         if (remaining.length > 0) {
@@ -130,22 +133,32 @@ function App() {
     if (!currentChatId) return;
 
     const userMessage: Message = { type: 'sent', text: messageText, timestamp: Date.now() };
-    const botMessage: Message = { type: 'received', text: '', timestamp: Date.now() };
+    const botMessage: Message = { type: 'received', text: '', timestamp: Date.now(), isTyping: true };
 
-    // Show the user message + an empty bot bubble immediately
+    // Show the user message + a typing indicator bubble immediately
     const messagesWithUser = [...serverMessages, userMessage, botMessage];
     setOptimisticMessages(messagesWithUser);
     setIsStreaming(true);
     streamingTextRef.current = '';
+
+    // Fire shadow metadata review concurrently — updates name/emoji/theme without blocking streaming
+    const shadowChatId = currentChatId;
+    reviewChatMetadata(shadowChatId, messageText).then((chatUpdate) => {
+      if (chatUpdate) {
+        queryClient.setQueryData<typeof chats>(['chats'], (old = []) =>
+          old.map(c => c.id === shadowChatId ? { ...c, ...chatUpdate } : c)
+        );
+      }
+    }).catch(() => { /* shadow errors are non-fatal */ });
 
     try {
       await sendMessageStream(
         messageText,
         currentChatId,
         (chunk) => {
-          // Accumulate streamed text and update the bot message
+          // Accumulate streamed text, clear typing indicator on first chunk
           streamingTextRef.current += chunk;
-          const updatedBot: Message = { ...botMessage, text: streamingTextRef.current };
+          const updatedBot: Message = { ...botMessage, text: streamingTextRef.current, isTyping: false };
           setOptimisticMessages([...serverMessages, userMessage, updatedBot]);
         },
         (sessionId, chatUpdate: ChatUpdate | null) => {
@@ -173,7 +186,7 @@ function App() {
 
   return (
     <div
-      className="flex h-screen bg-tn-bg text-tn-fg font-bauhaus overflow-hidden"
+      className={`flex h-screen bg-theme-bg text-theme-fg font-bauhaus overflow-hidden ${theme}`}
       style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
     >
       <ChatList
@@ -186,6 +199,8 @@ function App() {
         onEditChat={handleEditChat}
         onShowTemplates={() => setShowTemplates(true)}
         sidebarWidth={sidebarWidth}
+        theme={theme}
+        onThemeChange={setTheme}
       />
       <div
         className="resize-handle"
