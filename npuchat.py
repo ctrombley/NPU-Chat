@@ -35,7 +35,11 @@ def create_app(run_migrations=True):
     with app.app_context():
         migrations_dir = os.path.join(app.root_path, 'migrations')
         if run_migrations and os.path.isdir(migrations_dir):
-            upgrade()
+            try:
+                upgrade()
+            except Exception:
+                # Fallback: create tables directly if migrations fail
+                db.create_all()
         else:
             db.create_all()
         TemplateService.ensure_default_template()
