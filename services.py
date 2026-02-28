@@ -25,12 +25,13 @@ class ChatService:
         return f"Chat {max_num + 1}"
 
     @staticmethod
-    def create_chat(name: Optional[str] = None) -> Chat:
+    def create_chat(name: Optional[str] = None, template_id: Optional[str] = None) -> Chat:
         auto_named = not name
         if auto_named:
             name = ChatService._next_default_name()
         chat_id = str(uuid.uuid4())
-        chat = Chat(id=chat_id, name=name, needs_naming=auto_named)
+        chat = Chat(id=chat_id, name=name, needs_naming=auto_named,
+                    template_id=template_id or 'default')
         db.session.add(chat)
         db.session.commit()
         return chat
@@ -117,6 +118,18 @@ class TemplateService:
             template.postfix = postfix
         db.session.commit()
         return template
+
+    @staticmethod
+    def clone_template(template_id: str) -> Optional[Template]:
+        source = db.session.get(Template, template_id)
+        if not source:
+            return None
+        new_id = str(uuid.uuid4())
+        clone = Template(id=new_id, name=f"Copy of {source.name}",
+                         prefix=source.prefix, postfix=source.postfix)
+        db.session.add(clone)
+        db.session.commit()
+        return clone
 
     @staticmethod
     def delete_template(template_id: str) -> bool:
@@ -243,6 +256,7 @@ class NamingService:
                 TemplateService.ensure_default_template()
                 default_template = TemplateService.get_template('default')
             naming_response = LLMService.feed_the_llama(naming_prompt, default_template.prefix, default_template.postfix)
+            logger.debug("Raw LLM naming response: %s", naming_response)
 
             parsed = None
             try:
@@ -263,5 +277,10 @@ class NamingService:
                     chat.emoji = emoji
                     chat.needs_naming = False
                     db.session.commit()
+                    logger.info("Chat %s renamed to '%s' %s", chat.id, name, emoji)
+                else:
+                    logger.warning("Naming response parsed but 'name' was empty for chat %s", chat.id)
+            else:
+                logger.warning("Failed to parse naming response for chat %s: %s", chat.id, naming_response)
         except Exception as e:
             logger.exception("Failed to generate chat name: %s", e)

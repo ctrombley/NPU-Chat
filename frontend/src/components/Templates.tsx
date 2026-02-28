@@ -12,12 +12,13 @@ interface EditingState {
 
 interface TemplatesProps {
   onClose: () => void;
+  onNewChatWithTemplate?: (templateId: string) => void;
 }
 
 const inputClass = "w-full px-3 py-2 bg-tn-bg-dark text-tn-fg border border-tn-border rounded text-sm focus:outline-none focus:ring-1 focus:ring-tn-blue placeholder:text-tn-comment";
 const textareaClass = "w-full px-3 py-2 bg-tn-bg-dark text-tn-fg border border-tn-border rounded text-sm resize-y min-h-[80px] focus:outline-none focus:ring-1 focus:ring-tn-blue placeholder:text-tn-comment font-mono";
 
-const Templates: React.FC<TemplatesProps> = ({ onClose }) => {
+const Templates: React.FC<TemplatesProps> = ({ onClose, onNewChatWithTemplate }) => {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [editing, setEditing] = useState<EditingState | null>(null);
@@ -79,6 +80,22 @@ const Templates: React.FC<TemplatesProps> = ({ onClose }) => {
       console.error('Error deleting template:', error);
     }
   }, [confirmingDeleteId, loadTemplates]);
+
+  const handleClone = useCallback(async (templateId: string) => {
+    try {
+      await api.cloneTemplate(templateId);
+      await loadTemplates();
+    } catch (error) {
+      console.error('Error cloning template:', error);
+    }
+  }, [loadTemplates]);
+
+  const handleNewChat = useCallback((templateId: string) => {
+    if (onNewChatWithTemplate) {
+      onNewChatWithTemplate(templateId);
+      onClose();
+    }
+  }, [onNewChatWithTemplate, onClose]);
 
   const handleCreateSave = useCallback(async () => {
     if (!newTemplate.name) return;
@@ -183,6 +200,16 @@ const Templates: React.FC<TemplatesProps> = ({ onClose }) => {
                     </div>
                   </div>
                   <div className="flex gap-2 flex-shrink-0">
+                    {onNewChatWithTemplate && (
+                      <Button
+                        variant="primary"
+                        size="compact"
+                        className="px-3 py-1"
+                        onClick={() => handleNewChat(template.id)}
+                      >
+                        New Chat
+                      </Button>
+                    )}
                     <Button
                       variant="secondary"
                       size="compact"
@@ -190,6 +217,14 @@ const Templates: React.FC<TemplatesProps> = ({ onClose }) => {
                       onClick={() => handleEdit(template)}
                     >
                       Edit
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="compact"
+                      className="px-3 py-1"
+                      onClick={() => handleClone(template.id)}
+                    >
+                      Clone
                     </Button>
                     <Button
                       variant="secondary"

@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 class CreateChatRequest(BaseModel):
     name: Optional[str] = Field(default=None, max_length=255)
+    template_id: Optional[str] = None
 
 
 class UpdateChatRequest(BaseModel):

@@ -9,6 +9,7 @@ export interface Chat {
   id: string;
   name?: string;
   emoji?: string;
+  template_id?: string;
   is_favorite?: boolean;
   messages: Message[];
 }
@@ -50,6 +51,7 @@ export interface JsonApiErrorDocument {
 export interface ChatAttributes {
   name: string;
   emoji: string;
+  template_id: string;
   is_favorite: boolean;
   message_count: number;
   created_at: number | null;

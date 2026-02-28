@@ -191,6 +191,39 @@ def update_template(template_id):
     }))
 
 
+@templates_bp.route('/templates/<template_id>/clone', methods=['POST'])
+def clone_template(template_id):
+    """Clone a template.
+    ---
+    tags:
+      - templates
+    produces:
+      - application/vnd.api+json
+    parameters:
+      - in: path
+        name: template_id
+        type: string
+        required: true
+    responses:
+      201:
+        description: Template cloned
+      404:
+        description: Template not found
+    """
+    clone = TemplateService.clone_template(template_id)
+    if not clone:
+        return jsonapi_error_response(404, 'Not Found', 'Template not found')
+
+    return jsonapi_response(
+        serialize_resource('templates', clone.id, {
+            'name': clone.name,
+            'prefix': clone.prefix,
+            'postfix': clone.postfix,
+        }),
+        201,
+    )
+
+
 @templates_bp.route('/templates/<template_id>', methods=['DELETE'])
 def delete_template(template_id):
     """Delete a template.

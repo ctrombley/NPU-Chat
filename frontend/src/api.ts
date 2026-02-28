@@ -47,14 +47,16 @@ export async function listChats(): Promise<Chat[]> {
     id: c.id,
     name: c.name,
     emoji: c.emoji || '',
+    template_id: c.template_id || 'default',
     is_favorite: c.is_favorite || false,
     messages: [],
   }));
 }
 
-export async function createChat(name?: string): Promise<Chat> {
+export async function createChat(name?: string, templateId?: string): Promise<Chat> {
   const attrs: Record<string, string> = {};
   if (name) attrs.name = name;
+  if (templateId) attrs.template_id = templateId;
   const response = await apiFetch('/api/v1/chats', {
     method: 'POST',
     body: JSON.stringify(wrapResource('chats', attrs)),
@@ -66,6 +68,7 @@ export async function createChat(name?: string): Promise<Chat> {
     id: resource.id,
     name: resource.attributes.name,
     emoji: resource.attributes.emoji || '',
+    template_id: resource.attributes.template_id || 'default',
     is_favorite: resource.attributes.is_favorite || false,
     messages: [],
   };
@@ -130,6 +133,22 @@ export async function updateTemplate(
     body: JSON.stringify(wrapResource('templates', attrs, templateId)),
   });
   if (!response.ok) throw new Error('Failed to update template');
+}
+
+export async function cloneTemplate(templateId: string): Promise<Template> {
+  const response = await apiFetch(`/api/v1/templates/${templateId}/clone`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+  if (!response.ok) throw new Error('Failed to clone template');
+  const doc: JsonApiDocument<TemplateAttributes> = await response.json();
+  const resource = Array.isArray(doc.data) ? doc.data[0] : doc.data;
+  return {
+    id: resource.id,
+    name: resource.attributes.name,
+    prefix: resource.attributes.prefix,
+    postfix: resource.attributes.postfix,
+  };
 }
 
 export async function deleteTemplate(templateId: string): Promise<void> {

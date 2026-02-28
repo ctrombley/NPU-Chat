@@ -27,14 +27,14 @@ const Message: React.FC<MessageProps> = ({ message }) => {
       <p className="m-0 p-0">{getCleanText(message.text)}</p>
       {message.type === 'received' && (
         <button
-          className={`p-2.5 inline-block bg-tn-bg-highlight text-tn-comment text-lg font-bold font-sans no-underline border border-tn-border rounded shadow-lg transition-all w-10 h-10 leading-5 text-center hover:text-tn-fg ${
-            copyFeedback ? 'animate' : ''
+          className={`absolute top-2 right-2 bg-tn-bg-highlight text-tn-comment text-sm font-bold font-sans no-underline border border-tn-border rounded shadow-lg transition-all w-8 h-8 leading-5 text-center hover:text-tn-fg opacity-0 group-hover:opacity-100 ${
+            copyFeedback ? 'opacity-100' : ''
           }`}
           onClick={handleCopy}
           aria-label="Copy message"
           title="Copy message"
         >
-          ⧈
+          {copyFeedback ? '\u2713' : '\u29C8'}
         </button>
       )}
     </MessageBubble>

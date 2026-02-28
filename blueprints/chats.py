@@ -54,11 +54,12 @@ def create_chat():
     if error:
         return error
 
-    chat = ChatService.create_chat(data.name if data.name else None)
+    chat = ChatService.create_chat(data.name if data.name else None, template_id=data.template_id)
     return jsonapi_response(
         serialize_resource('chats', chat.id, {
             'name': chat.name,
             'emoji': chat.emoji,
+            'template_id': chat.template_id,
             'is_favorite': chat.is_favorite,
             'message_count': 0,
             'created_at': int(chat.created_at.timestamp() * 1000) if chat.created_at else None,

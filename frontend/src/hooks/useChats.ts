@@ -11,7 +11,11 @@ export function useChats() {
 export function useCreateChat() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (name?: string | void) => api.createChat(name || undefined),
+    mutationFn: (opts?: { name?: string; templateId?: string } | string | void) => {
+      if (typeof opts === 'string') return api.createChat(opts);
+      if (opts && typeof opts === 'object') return api.createChat(opts.name, opts.templateId);
+      return api.createChat();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chats'] });
     },

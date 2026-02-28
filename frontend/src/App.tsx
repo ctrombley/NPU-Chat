@@ -70,6 +70,16 @@ function App() {
     }
   };
 
+  const handleNewChatWithTemplate = async (templateId: string) => {
+    try {
+      const chatObj = await createChatMutation.mutateAsync({ templateId });
+      setCurrentChatId(chatObj.id);
+      setOptimisticMessages([]);
+    } catch (error) {
+      console.error('Failed to create chat with template:', error);
+    }
+  };
+
   const handleSwitchChat = (chatId: string) => {
     setCurrentChatId(chatId);
     setOptimisticMessages([]);
@@ -165,7 +175,7 @@ function App() {
         isLoading={isStreaming}
       />
       {showTemplates && (
-        <Templates onClose={() => setShowTemplates(false)} />
+        <Templates onClose={() => setShowTemplates(false)} onNewChatWithTemplate={handleNewChatWithTemplate} />
       )}
     </div>
   );

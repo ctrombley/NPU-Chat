@@ -30,6 +30,7 @@ class Chat(db.Model):
             'id': self.id,
             'name': display_name,
             'emoji': self.emoji,
+            'template_id': self.template_id,
             'is_favorite': self.is_favorite,
             'message_count': len(self.messages),
             'created_at': int(self.created_at.timestamp() * 1000) if self.created_at else None
