@@ -3,42 +3,41 @@ import ChatList from './components/ChatList';
 import ChatMessages from './components/ChatMessages';
 import MessageInput from './components/MessageInput';
 import Templates from './components/Templates';
-import { Message, Chat } from './types';
-import * as api from './api';
+import { Message } from './types';
+import { useChats, useCreateChat, useDeleteChat, useToggleFavorite } from './hooks/useChats';
+import { useMessages } from './hooks/useMessages';
+import { useSendMessage } from './hooks/useSearch';
 
 function App() {
-  const [chats, setChats] = useState<Chat[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
-  const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
   const [showTemplates, setShowTemplates] = useState(false);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   const [newChatName, setNewChatName] = useState('');
+  const [optimisticMessages, setOptimisticMessages] = useState<Message[]>([]);
 
+  const { data: chats = [] } = useChats();
+  const { data: serverMessages = [] } = useMessages(currentChatId);
+  const createChatMutation = useCreateChat();
+  const deleteChatMutation = useDeleteChat();
+  const toggleFavoriteMutation = useToggleFavorite();
+  const sendMessageMutation = useSendMessage();
+
+  // Select first chat when chats load and none is selected
   useEffect(() => {
-    fetchChats();
-  }, []);
-
-  const fetchChats = async () => {
-    try {
-      const chatObjects = await api.listChats();
-      setChats(chatObjects);
-      if (chatObjects.length > 0) {
-        setCurrentChatId(chatObjects[0].id);
-        fetchMessages(chatObjects[0].id);
-      }
-    } catch (error) {
-      console.error('Failed to fetch chats:', error);
+    if (chats.length > 0 && !currentChatId) {
+      setCurrentChatId(chats[0].id);
     }
-  };
+  }, [chats, currentChatId]);
 
-  const fetchMessages = async (chatId: string) => {
-    try {
-      const messages = await api.getChatMessages(chatId);
-      setCurrentMessages(messages);
-    } catch (error) {
-      console.error('Failed to fetch messages:', error);
+  // Merge server messages with optimistic messages
+  const currentMessages = optimisticMessages.length > 0 ? optimisticMessages : serverMessages;
+
+  // Clear optimistic messages when server messages update after a send
+  useEffect(() => {
+    if (!sendMessageMutation.isPending && optimisticMessages.length > 0) {
+      setOptimisticMessages([]);
     }
-  };
+  }, [sendMessageMutation.isPending, optimisticMessages.length]);
 
   const handleNewChat = () => {
     setIsCreatingChat(true);
@@ -51,10 +50,9 @@ function App() {
     setIsCreatingChat(false);
     setNewChatName('');
     try {
-      const chatObj = await api.createChat(name);
-      setChats(prev => [...prev, chatObj]);
+      const chatObj = await createChatMutation.mutateAsync(name);
       setCurrentChatId(chatObj.id);
-      setCurrentMessages([]);
+      setOptimisticMessages([]);
     } catch (error) {
       console.error('Failed to create chat:', error);
     }
@@ -67,21 +65,19 @@ function App() {
 
   const handleSwitchChat = (chatId: string) => {
     setCurrentChatId(chatId);
-    fetchMessages(chatId);
+    setOptimisticMessages([]);
   };
 
   const handleDeleteChat = async (chatId: string) => {
     try {
-      await api.deleteChat(chatId);
-      setChats(chats.filter(c => c.id !== chatId));
+      await deleteChatMutation.mutateAsync(chatId);
       if (currentChatId === chatId) {
         const remaining = chats.filter(c => c.id !== chatId);
         if (remaining.length > 0) {
           setCurrentChatId(remaining[0].id);
-          fetchMessages(remaining[0].id);
         } else {
           setCurrentChatId(null);
-          setCurrentMessages([]);
+          setOptimisticMessages([]);
         }
       }
     } catch (error) {
@@ -91,8 +87,7 @@ function App() {
 
   const handleToggleFavorite = async (chatId: string, isFavorite: boolean) => {
     try {
-      await api.updateChat(chatId, { is_favorite: isFavorite });
-      setChats(chats.map(c => c.id === chatId ? { ...c, is_favorite: isFavorite } : c));
+      await toggleFavoriteMutation.mutateAsync({ chatId, isFavorite });
     } catch (error) {
       console.error('Failed to toggle favorite:', error);
     }
@@ -100,17 +95,16 @@ function App() {
 
   const handleSendMessage = async (messageText: string) => {
     if (!currentChatId) return;
-    // Add user message to current messages
     const userMessage: Message = { type: 'sent', text: messageText, timestamp: Date.now() };
-    setCurrentMessages(prev => [...prev, userMessage]);
+    setOptimisticMessages([...serverMessages, userMessage]);
 
     try {
-      const data = await api.sendMessage(messageText, currentChatId);
+      const data = await sendMessageMutation.mutateAsync({
+        inputText: messageText,
+        sessionId: currentChatId,
+      });
       const botMessage: Message = { type: 'received', text: data.content, timestamp: Date.now() };
-      setCurrentMessages(prev => [...prev, botMessage]);
-      // Refresh chat list to pick up auto-naming changes
-      const chatObjects = await api.listChats();
-      setChats(chatObjects);
+      setOptimisticMessages(prev => [...prev, botMessage]);
     } catch (error) {
       console.error('Failed to send message:', error);
     }

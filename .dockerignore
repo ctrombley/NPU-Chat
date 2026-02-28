@@ -1,0 +1,16 @@
+.git
+__pycache__
+*.pyc
+*.pyo
+node_modules
+frontend/node_modules
+data/
+static/dist/
+.env
+venv/
+.venv/
+*.egg-info
+.pytest_cache
+.coverage
+htmlcov/
+e2e/node_modules

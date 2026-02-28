@@ -7,8 +7,8 @@ from conftest import (
     jsonapi_post,
 )
 
-from npuchat import create_app
 from models import Chat, Message, db
+from npuchat import create_app
 
 
 def test_auto_naming_and_persistence(client, monkeypatch):
@@ -26,7 +26,7 @@ def test_auto_naming_and_persistence(client, monkeypatch):
     monkeypatch.setattr('services.LLMService.feed_the_llama', fake_feed)
 
     resp = client.post(
-        '/api/search',
+        '/api/v1/search',
         data=json.dumps({'data': {'type': 'search-requests', 'attributes': {'input_text': 'Hello world'}}}),
         content_type=JSONAPI_CONTENT_TYPE,
     )
@@ -49,7 +49,7 @@ def test_auto_naming_and_persistence(client, monkeypatch):
 
 
 def test_explicit_chat_creation_persists_name(client):
-    resp = jsonapi_post(client, '/api/chats', 'chats', {'name': 'Persisted Chat'})
+    resp = jsonapi_post(client, '/api/v1/chats', 'chats', {'name': 'Persisted Chat'})
     assert resp.status_code == 201
     cid = get_jsonapi_id(resp)
 
@@ -62,12 +62,12 @@ def test_explicit_chat_creation_persists_name(client):
 
 def test_update_chat_metadata(client):
     # Create a chat first
-    resp = jsonapi_post(client, '/api/chats', 'chats', {'name': 'Original Name'})
+    resp = jsonapi_post(client, '/api/v1/chats', 'chats', {'name': 'Original Name'})
     assert resp.status_code == 201
     cid = get_jsonapi_id(resp)
 
     # Update name
-    resp = jsonapi_patch(client, f'/api/chats/{cid}', 'chats', cid, {'name': 'Updated Name'})
+    resp = jsonapi_patch(client, f'/api/v1/chats/{cid}', 'chats', cid, {'name': 'Updated Name'})
     assert resp.status_code == 200
     data = json.loads(resp.data)['data']
     assert data['id'] == cid
@@ -75,7 +75,7 @@ def test_update_chat_metadata(client):
     assert data['attributes']['emoji'] == ''
 
     # Update emoji
-    resp = jsonapi_patch(client, f'/api/chats/{cid}', 'chats', cid, {'emoji': '\U0001f680'})
+    resp = jsonapi_patch(client, f'/api/v1/chats/{cid}', 'chats', cid, {'emoji': '\U0001f680'})
     assert resp.status_code == 200
     data = json.loads(resp.data)['data']
     assert data['id'] == cid
@@ -83,7 +83,7 @@ def test_update_chat_metadata(client):
     assert data['attributes']['emoji'] == '\U0001f680'
 
     # Update both
-    resp = jsonapi_patch(client, f'/api/chats/{cid}', 'chats', cid, {'name': 'Final Name', 'emoji': '\U0001f31f'})
+    resp = jsonapi_patch(client, f'/api/v1/chats/{cid}', 'chats', cid, {'name': 'Final Name', 'emoji': '\U0001f31f'})
     assert resp.status_code == 200
     data = json.loads(resp.data)['data']
     assert data['id'] == cid
@@ -99,9 +99,9 @@ def test_update_chat_metadata(client):
         assert chat.emoji == '\U0001f31f'
 
     # Test empty attributes (still valid PATCH, just no changes)
-    resp = jsonapi_patch(client, f'/api/chats/{cid}', 'chats', cid, {})
+    resp = jsonapi_patch(client, f'/api/v1/chats/{cid}', 'chats', cid, {})
     assert resp.status_code == 200
 
     # Test non-existent chat
-    resp = jsonapi_patch(client, '/api/chats/nonexistent', 'chats', 'nonexistent', {'name': 'New Name'})
+    resp = jsonapi_patch(client, '/api/v1/chats/nonexistent', 'chats', 'nonexistent', {'name': 'New Name'})
     assert resp.status_code == 404

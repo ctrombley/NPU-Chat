@@ -1,9 +1,8 @@
 import logging
 from logging.config import fileConfig
 
-from flask import current_app
-
 from alembic import context
+from flask import current_app
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -93,6 +92,11 @@ def run_migrations_online():
     conf_args = current_app.extensions['migrate'].configure_args
     if conf_args.get("process_revision_directives") is None:
         conf_args["process_revision_directives"] = process_revision_directives
+
+    # Detect SQLite for render_as_batch support
+    is_sqlite = 'sqlite' in get_engine_url()
+    if is_sqlite:
+        conf_args.setdefault("render_as_batch", True)
 
     connectable = get_engine()
 

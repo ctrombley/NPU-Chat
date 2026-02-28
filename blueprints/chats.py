@@ -3,10 +3,13 @@ from flask import Blueprint, request
 from jsonapi import (
     jsonapi_error_response,
     jsonapi_response,
-    parse_request_data,
+    paginate_query,
     serialize_collection,
     serialize_resource,
+    validate_jsonapi_request,
 )
+from models import Chat, Message
+from schemas import CreateChatRequest, UpdateChatRequest
 from services import ChatService
 
 chats_bp = Blueprint('chats', __name__)
@@ -47,11 +50,11 @@ def create_chat():
       400:
         description: Bad request
     """
-    attrs = parse_request_data(request)
-    if attrs is None or 'name' not in attrs:
-        return jsonapi_error_response(400, 'Bad Request', 'name is required')
+    data, error = validate_jsonapi_request(request, CreateChatRequest)
+    if error:
+        return error
 
-    chat = ChatService.create_chat(attrs['name'])
+    chat = ChatService.create_chat(data.name)
     return jsonapi_response(
         serialize_resource('chats', chat.id, {
             'name': chat.name,
@@ -72,13 +75,23 @@ def list_chats():
       - chats
     produces:
       - application/vnd.api+json
+    parameters:
+      - in: query
+        name: page[number]
+        type: integer
+        default: 1
+      - in: query
+        name: page[size]
+        type: integer
+        default: 50
     responses:
       200:
         description: A list of chats
     """
-    chats = ChatService.list_chats()
+    query = Chat.query.order_by(Chat.created_at)
+    chats, meta = paginate_query(query, request)
     items = [chat.to_dict() for chat in chats]
-    return jsonapi_response(serialize_collection('chats', items))
+    return jsonapi_response(serialize_collection('chats', items, meta=meta))
 
 
 @chats_bp.route('/chats/<chat_id>', methods=['GET'])
@@ -155,16 +168,16 @@ def update_chat(chat_id):
       404:
         description: Chat not found
     """
-    attrs = parse_request_data(request)
-    if attrs is None:
-        return jsonapi_error_response(400, 'Bad Request', 'Request body is required')
+    data, error = validate_jsonapi_request(request, UpdateChatRequest)
+    if error:
+        return error
 
     chat = ChatService.update_chat(
         chat_id,
-        attrs.get('name'),
-        attrs.get('emoji'),
-        attrs.get('template_id'),
-        attrs.get('is_favorite'),
+        data.name,
+        data.emoji,
+        data.template_id,
+        data.is_favorite,
     )
     if not chat:
         return jsonapi_error_response(404, 'Not Found', 'Chat not found')
@@ -212,6 +225,14 @@ def get_chat_messages(chat_id):
         name: chat_id
         type: string
         required: true
+      - in: query
+        name: page[number]
+        type: integer
+        default: 1
+      - in: query
+        name: page[size]
+        type: integer
+        default: 50
     responses:
       200:
         description: A list of messages
@@ -222,7 +243,8 @@ def get_chat_messages(chat_id):
     if not chat:
         return jsonapi_error_response(404, 'Not Found', 'Chat not found')
 
-    messages = chat.messages
+    query = Message.query.filter_by(chat_id=chat_id).order_by(Message.position)
+    messages, meta = paginate_query(query, request)
     items = []
     for msg in messages:
         items.append({
@@ -230,4 +252,4 @@ def get_chat_messages(chat_id):
             'role': msg.role,
             'content': msg.content,
         })
-    return jsonapi_response(serialize_collection('messages', items))
+    return jsonapi_response(serialize_collection('messages', items, meta=meta))

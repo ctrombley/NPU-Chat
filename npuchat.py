@@ -1,14 +1,18 @@
 import os
 
+from dotenv import load_dotenv
 from flasgger import Swagger
-from flask import Flask, request, send_from_directory
+from flask import Flask, redirect, request, send_from_directory
 from flask_migrate import Migrate, upgrade
 
 from blueprints.chats import chats_bp
+from blueprints.health import health_bp
 from blueprints.search import search_bp
 from blueprints.templates import templates_bp
 from config import Config
+from extensions import limiter
 from jsonapi import jsonapi_error_response
+from logging_config import setup_logging
 from models import db
 from services import TemplateService
 
@@ -16,12 +20,17 @@ migrate = Migrate()
 
 
 def create_app(run_migrations=True):
+    load_dotenv()
+
     app = Flask(__name__)
     config = Config()
     app.config.from_object(config)
 
     db.init_app(app)
-    migrate.init_app(app, db, render_as_batch=True)
+    is_sqlite = 'sqlite' in app.config['SQLALCHEMY_DATABASE_URI']
+    migrate.init_app(app, db, render_as_batch=is_sqlite)
+    limiter.init_app(app)
+    setup_logging(app)
 
     with app.app_context():
         migrations_dir = os.path.join(app.root_path, 'migrations')
@@ -40,13 +49,19 @@ def create_app(run_migrations=True):
     }
     Swagger(app)
 
-    app.register_blueprint(chats_bp, url_prefix='/api')
-    app.register_blueprint(templates_bp, url_prefix='/api')
-    app.register_blueprint(search_bp, url_prefix='/api')
+    app.register_blueprint(health_bp, url_prefix='/api')
+    app.register_blueprint(chats_bp, url_prefix='/api/v1')
+    app.register_blueprint(templates_bp, url_prefix='/api/v1')
+    app.register_blueprint(search_bp, url_prefix='/api/v1')
+
+    @app.route('/api/<path:path>', methods=['GET', 'POST', 'PATCH', 'PUT', 'DELETE'])
+    def api_v1_redirect(path):
+        """Backward-compatible redirect from /api/* to /api/v1/*."""
+        return redirect(f'/api/v1/{path}', code=308)
 
     @app.after_request
     def set_jsonapi_content_type(response):
-        if request.path.startswith('/api/'):
+        if request.path.startswith('/api/v1/') or request.path == '/api/health':
             response.headers['Content-Type'] = 'application/vnd.api+json'
         return response
 

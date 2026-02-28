@@ -3,10 +3,13 @@ from flask import Blueprint, request
 from jsonapi import (
     jsonapi_error_response,
     jsonapi_response,
-    parse_request_data,
+    paginate_query,
     serialize_collection,
     serialize_resource,
+    validate_jsonapi_request,
 )
+from models import Template
+from schemas import CreateTemplateRequest, UpdateTemplateRequest
 from services import TemplateService
 
 templates_bp = Blueprint('templates', __name__)
@@ -20,13 +23,23 @@ def list_templates():
       - templates
     produces:
       - application/vnd.api+json
+    parameters:
+      - in: query
+        name: page[number]
+        type: integer
+        default: 1
+      - in: query
+        name: page[size]
+        type: integer
+        default: 50
     responses:
       200:
         description: A list of templates
     """
-    templates = TemplateService.list_templates()
+    query = Template.query
+    templates, meta = paginate_query(query, request)
     items = [t.to_dict() for t in templates]
-    return jsonapi_response(serialize_collection('templates', items))
+    return jsonapi_response(serialize_collection('templates', items, meta=meta))
 
 
 @templates_bp.route('/templates', methods=['POST'])
@@ -67,11 +80,11 @@ def create_template():
       400:
         description: Bad request
     """
-    attrs = parse_request_data(request)
-    if attrs is None or not all(k in attrs for k in ('name', 'prefix', 'postfix')):
-        return jsonapi_error_response(400, 'Bad Request', 'name, prefix, and postfix are required')
+    data, error = validate_jsonapi_request(request, CreateTemplateRequest)
+    if error:
+        return error
 
-    template = TemplateService.create_template(attrs['name'], attrs['prefix'], attrs['postfix'])
+    template = TemplateService.create_template(data.name, data.prefix, data.postfix)
     return jsonapi_response(
         serialize_resource('templates', template.id, {
             'name': template.name,
@@ -158,15 +171,15 @@ def update_template(template_id):
       404:
         description: Template not found
     """
-    attrs = parse_request_data(request)
-    if attrs is None:
-        return jsonapi_error_response(400, 'Bad Request', 'Request body is required')
+    data, error = validate_jsonapi_request(request, UpdateTemplateRequest)
+    if error:
+        return error
 
     template = TemplateService.update_template(
         template_id,
-        attrs.get('name'),
-        attrs.get('prefix'),
-        attrs.get('postfix'),
+        data.name,
+        data.prefix,
+        data.postfix,
     )
     if not template:
         return jsonapi_error_response(404, 'Not Found', 'Template not found or cannot update default')

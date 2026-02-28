@@ -1,28 +1,33 @@
-import configparser
 import os
 
 
 class Config:
     def __init__(self):
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        self.load_config(script_dir)
 
-    def load_config(self, script_dir):
-        config_path = os.path.join(script_dir, 'settings.ini')
-        parser = configparser.ConfigParser()
-        parser.read(config_path)
+        # Web UI
+        self.BINDING_ADDRESS = os.environ.get('BINDING_ADDRESS', '0.0.0.0')
+        self.BINDING_PORT = int(os.environ.get('BINDING_PORT', '1314'))
 
-        self.BINDING_ADDRESS = parser.get('chat_ui', 'BINDING_ADDRESS')
-        self.BINDING_PORT = int(parser.get('chat_ui', 'BINDING_PORT'))
-        self.NPU_ADDRESS = parser.get('npu', 'NPU_ADDRESS')
-        self.NPU_PORT = parser.get('npu', 'NPU_PORT')
-        self.CONNECTION_TIMEOUT = int(parser.get('timeout', 'TIMEOUT'))
+        # NPU Server
+        self.NPU_ADDRESS = os.environ.get('NPU_ADDRESS', '192.168.0.196')
+        self.NPU_PORT = os.environ.get('NPU_PORT', '31337')
+        self.CONNECTION_TIMEOUT = int(os.environ.get('CONNECTION_TIMEOUT', '45'))
 
-        self.USE_CONTEXT = parser.getboolean('context', 'USE_CONTEXT', fallback=False)
-        raw_context_depth = int(parser.get('context', 'DEPTH'))
+        # Context
+        self.USE_CONTEXT = os.environ.get('USE_CONTEXT', 'True').lower() in ('true', '1', 'yes')
+        raw_context_depth = int(os.environ.get('CONTEXT_DEPTH', '1'))
         self.CONTEXT_DEPTH = max(2, raw_context_depth)
 
         # Database
         default_db = f"sqlite:///{os.path.join(script_dir, 'data', 'chats.db')}"
         self.SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', default_db)
         self.SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+        # Logging
+        self.LOG_FORMAT = os.environ.get('LOG_FORMAT', 'json')
+        self.LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
+
+        # Rate limiting
+        self.RATELIMIT_DEFAULT = os.environ.get('RATELIMIT_DEFAULT', '200 per day;50 per hour')
+        self.RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI', 'memory://')

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '../test-utils';
+import { render, screen, fireEvent, waitFor, act } from '../test-utils';
 import App from '../App';
 
 // Mock fetch globally
@@ -15,7 +15,7 @@ const jsonapiResource = (type: string, id: string, attrs: Record<string, any>) =
 });
 
 const defaultMockFetch = (url: string, options?: RequestInit) => {
-  if (url === '/api/chats' && (!options || !options.method || options.method === 'GET')) {
+  if (url === '/api/v1/chats' && (!options || !options.method || options.method === 'GET')) {
     return Promise.resolve({
       ok: true,
       json: () => Promise.resolve(
@@ -25,13 +25,13 @@ const defaultMockFetch = (url: string, options?: RequestInit) => {
       ),
     });
   }
-  if (url === '/api/chats/chat-1/messages') {
+  if (url === '/api/v1/chats/chat-1/messages') {
     return Promise.resolve({
       ok: true,
       json: () => Promise.resolve(jsonapiCollection('messages', [])),
     });
   }
-  if (url === '/api/templates') {
+  if (url === '/api/v1/templates') {
     return Promise.resolve({
       ok: true,
       json: () => Promise.resolve(jsonapiCollection('templates', [])),
@@ -56,9 +56,9 @@ describe('App Integration', () => {
   });
 
   it('switches between chats', async () => {
-    // Override mock to also handle POST /api/chats for creating a new chat
+    // Override mock to also handle POST /api/v1/chats for creating a new chat
     (global.fetch as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
-      if (url === '/api/chats' && options?.method === 'POST') {
+      if (url === '/api/v1/chats' && options?.method === 'POST') {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve(
@@ -85,16 +85,16 @@ describe('App Integration', () => {
     fireEvent.click(screen.getByText('OK'));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/chats', expect.objectContaining({
+      expect(global.fetch).toHaveBeenCalledWith('/api/v1/chats', expect.objectContaining({
         method: 'POST',
       }));
     });
   });
 
   it('sends messages successfully', async () => {
-    // Override mock to also handle POST /api/search
+    // Override mock to also handle POST /api/v1/search
     (global.fetch as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
-      if (url === '/api/search' && options?.method === 'POST') {
+      if (url === '/api/v1/search' && options?.method === 'POST') {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve(
@@ -110,18 +110,21 @@ describe('App Integration', () => {
 
     render(<App />);
 
+    // Wait for chats to load and chat to be selected
     await waitFor(() => {
-      expect(screen.getByLabelText('Type your message')).toBeInTheDocument();
+      expect(screen.getByText(/Test Chat/)).toBeInTheDocument();
     });
 
     const messageInput = screen.getByLabelText('Type your message');
     const sendButton = screen.getByRole('button', { name: 'Send message' });
 
-    fireEvent.change(messageInput, { target: { value: 'Hello bot' } });
-    fireEvent.click(sendButton);
+    await act(async () => {
+      fireEvent.change(messageInput, { target: { value: 'Hello bot' } });
+      fireEvent.click(sendButton);
+    });
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/search', expect.objectContaining({
+      expect(global.fetch).toHaveBeenCalledWith('/api/v1/search', expect.objectContaining({
         method: 'POST',
       }));
     });
@@ -149,10 +152,13 @@ describe('App Integration', () => {
     });
 
     const favoriteButton = screen.getByRole('button', { name: 'Add to favorites' });
-    fireEvent.click(favoriteButton);
+
+    await act(async () => {
+      fireEvent.click(favoriteButton);
+    });
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/chats/chat-1', expect.objectContaining({
+      expect(global.fetch).toHaveBeenCalledWith('/api/v1/chats/chat-1', expect.objectContaining({
         method: 'PATCH',
       }));
     });
@@ -166,10 +172,13 @@ describe('App Integration', () => {
     });
 
     const deleteButton = screen.getByRole('button', { name: 'Delete chat' });
-    fireEvent.click(deleteButton);
+
+    await act(async () => {
+      fireEvent.click(deleteButton);
+    });
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/chats/chat-1', expect.objectContaining({
+      expect(global.fetch).toHaveBeenCalledWith('/api/v1/chats/chat-1', expect.objectContaining({
         method: 'DELETE',
       }));
     });
@@ -178,9 +187,9 @@ describe('App Integration', () => {
   it('handles network errors gracefully', async () => {
     const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-    // Override mock to reject on POST /api/chats
+    // Override mock to reject on POST /api/v1/chats
     (global.fetch as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
-      if (url === '/api/chats' && options?.method === 'POST') {
+      if (url === '/api/v1/chats' && options?.method === 'POST') {
         return Promise.reject(new Error('Network error'));
       }
       return defaultMockFetch(url, options);
@@ -199,7 +208,10 @@ describe('App Integration', () => {
     // Type name and submit
     const nameInput = screen.getByPlaceholderText('Chat name...');
     fireEvent.change(nameInput, { target: { value: 'Test' } });
-    fireEvent.click(screen.getByText('OK'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('OK'));
+    });
 
     await waitFor(() => {
       expect(consoleSpy).toHaveBeenCalledWith('Failed to create chat:', expect.any(Error));

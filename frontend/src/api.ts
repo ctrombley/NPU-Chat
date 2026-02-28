@@ -40,7 +40,7 @@ async function apiFetch(url: string, options: RequestInit = {}): Promise<Respons
 // --- Chats ---
 
 export async function listChats(): Promise<Chat[]> {
-  const response = await apiFetch('/api/chats');
+  const response = await apiFetch('/api/v1/chats');
   if (!response.ok) throw new Error('Failed to fetch chats');
   const doc: JsonApiDocument<ChatAttributes> = await response.json();
   return unwrapCollection(doc).map(c => ({
@@ -53,7 +53,7 @@ export async function listChats(): Promise<Chat[]> {
 }
 
 export async function createChat(name: string): Promise<Chat> {
-  const response = await apiFetch('/api/chats', {
+  const response = await apiFetch('/api/v1/chats', {
     method: 'POST',
     body: JSON.stringify(wrapResource('chats', { name })),
   });
@@ -73,7 +73,7 @@ export async function updateChat(
   chatId: string,
   attrs: Partial<{ name: string; emoji: string; is_favorite: boolean; template_id: string }>
 ): Promise<void> {
-  const response = await apiFetch(`/api/chats/${chatId}`, {
+  const response = await apiFetch(`/api/v1/chats/${chatId}`, {
     method: 'PATCH',
     body: JSON.stringify(wrapResource('chats', attrs, chatId)),
   });
@@ -81,12 +81,12 @@ export async function updateChat(
 }
 
 export async function deleteChat(chatId: string): Promise<void> {
-  const response = await apiFetch(`/api/chats/${chatId}`, { method: 'DELETE' });
+  const response = await apiFetch(`/api/v1/chats/${chatId}`, { method: 'DELETE' });
   if (!response.ok) throw new Error('Failed to delete chat');
 }
 
 export async function getChatMessages(chatId: string): Promise<Message[]> {
-  const response = await apiFetch(`/api/chats/${chatId}/messages`);
+  const response = await apiFetch(`/api/v1/chats/${chatId}/messages`);
   if (!response.ok) throw new Error('Failed to fetch messages');
   const doc: JsonApiDocument<MessageAttributes> = await response.json();
   return unwrapCollection(doc).map(m => ({
@@ -100,7 +100,7 @@ export async function getChatMessages(chatId: string): Promise<Message[]> {
 // --- Templates ---
 
 export async function listTemplates(): Promise<Template[]> {
-  const response = await apiFetch('/api/templates');
+  const response = await apiFetch('/api/v1/templates');
   if (!response.ok) throw new Error('Failed to fetch templates');
   const doc: JsonApiDocument<TemplateAttributes> = await response.json();
   return unwrapCollection(doc).map(t => ({
@@ -112,7 +112,7 @@ export async function listTemplates(): Promise<Template[]> {
 }
 
 export async function createTemplate(name: string, prefix: string, postfix: string): Promise<void> {
-  const response = await apiFetch('/api/templates', {
+  const response = await apiFetch('/api/v1/templates', {
     method: 'POST',
     body: JSON.stringify(wrapResource('templates', { name, prefix, postfix })),
   });
@@ -123,7 +123,7 @@ export async function updateTemplate(
   templateId: string,
   attrs: Partial<{ name: string; prefix: string; postfix: string }>
 ): Promise<void> {
-  const response = await apiFetch(`/api/templates/${templateId}`, {
+  const response = await apiFetch(`/api/v1/templates/${templateId}`, {
     method: 'PATCH',
     body: JSON.stringify(wrapResource('templates', attrs, templateId)),
   });
@@ -131,7 +131,7 @@ export async function updateTemplate(
 }
 
 export async function deleteTemplate(templateId: string): Promise<void> {
-  const response = await apiFetch(`/api/templates/${templateId}`, { method: 'DELETE' });
+  const response = await apiFetch(`/api/v1/templates/${templateId}`, { method: 'DELETE' });
   if (!response.ok) throw new Error('Failed to delete template');
 }
 
@@ -141,7 +141,7 @@ export async function sendMessage(inputText: string, sessionId?: string): Promis
   const attrs: Record<string, string> = { input_text: inputText };
   if (sessionId) attrs.session_id = sessionId;
 
-  const response = await apiFetch('/api/search', {
+  const response = await apiFetch('/api/v1/search', {
     method: 'POST',
     body: JSON.stringify(wrapResource('search-requests', attrs)),
   });

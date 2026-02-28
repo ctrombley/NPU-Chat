@@ -3,13 +3,15 @@ import time
 
 from flask import Blueprint, current_app, request
 
+from extensions import limiter
 from jsonapi import (
     jsonapi_error_response,
     jsonapi_response,
-    parse_request_data,
     serialize_resource,
+    validate_jsonapi_request,
 )
 from models import Message, db
+from schemas import SearchRequest
 from services import (
     ChatService,
     LLMService,
@@ -23,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 @search_bp.route('/search', methods=['POST'])
+@limiter.limit("10 per minute")
 def search():
     """Send a message and get a response.
     ---
@@ -58,17 +61,15 @@ def search():
       400:
         description: Bad request
     """
-    attrs = parse_request_data(request)
-    if attrs is None:
-        return jsonapi_error_response(400, 'Bad Request', 'Request body is required')
+    data, error = validate_jsonapi_request(request, SearchRequest)
+    if error:
+        return error
 
-    session_id = attrs.get('session_id')
-    question = attrs.get('input_text', '')
-
+    question = data.input_text
     if not question.strip():
         return jsonapi_error_response(400, 'Bad Request', 'Empty input is not allowed.')
 
-    result = web_request_logic(session_id, question)
+    result = web_request_logic(data.session_id, question)
     resp = jsonapi_response(
         serialize_resource('search-results', result['session_id'], {
             'content': result['content'],

@@ -53,7 +53,7 @@ def test_context_persistence_and_autoname(client, monkeypatch):
 
     # 1) First user message -- no session_id provided so server creates one
     rv = client.post(
-        '/api/search',
+        '/api/v1/search',
         data=json.dumps({'data': {'type': 'search-requests', 'attributes': {'input_text': 'This chat is about apples.'}}}),
         content_type=JSONAPI_CONTENT_TYPE,
     )
@@ -77,7 +77,7 @@ def test_context_persistence_and_autoname(client, monkeypatch):
 
     # 2) Follow-up message using the returned session_id
     rv2 = client.post(
-        '/api/search',
+        '/api/v1/search',
         data=json.dumps({'data': {'type': 'search-requests', 'attributes': {'input_text': 'What is this chat about?', 'session_id': session_id}}}),
         content_type=JSONAPI_CONTENT_TYPE,
     )

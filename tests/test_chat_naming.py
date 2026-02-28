@@ -7,7 +7,7 @@ from models import Chat, db
 
 
 def test_autonaming_on_new_search_session(client):
-    """Verify that POSTing to /api/search without session_id creates a new Chat and attempts to auto-name it."""
+    """Verify that POSTing to /api/v1/search without session_id creates a new Chat and attempts to auto-name it."""
     app = client.application
 
     # Mock feed_the_llama responses: first call is the content reply, second call is naming JSON
@@ -36,7 +36,7 @@ def test_autonaming_on_new_search_session(client):
 
     with patch('requests.post', side_effect=side_effect_post):
         response = client.post(
-            '/api/search',
+            '/api/v1/search',
             data=json.dumps({'data': {'type': 'search-requests', 'attributes': {'input_text': 'Hello'}}}),
             content_type=JSONAPI_CONTENT_TYPE,
         )

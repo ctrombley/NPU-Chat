@@ -18,7 +18,7 @@ const mockTemplates = [
 const mockOnBack = jest.fn();
 
 const defaultMockFetch = (url: string, options?: RequestInit) => {
-  if (url === '/api/templates' && (!options || !options.method || options.method === 'GET')) {
+  if (url === '/api/v1/templates' && (!options || !options.method || options.method === 'GET')) {
     return Promise.resolve({
       ok: true,
       json: () => Promise.resolve(
@@ -76,7 +76,7 @@ describe('Templates', () => {
   it('handles edit template flow with inline form', async () => {
     // Override mock to handle PATCH
     (global.fetch as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
-      if (typeof url === 'string' && url.startsWith('/api/templates/') && options?.method === 'PATCH') {
+      if (typeof url === 'string' && url.startsWith('/api/v1/templates/') && options?.method === 'PATCH') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       }
       return defaultMockFetch(url, options);
@@ -105,7 +105,7 @@ describe('Templates', () => {
     fireEvent.click(screen.getByText('Save'));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/templates/template-1', expect.objectContaining({
+      expect(global.fetch).toHaveBeenCalledWith('/api/v1/templates/template-1', expect.objectContaining({
         method: 'PATCH',
       }));
     });
@@ -114,7 +114,7 @@ describe('Templates', () => {
   it('handles delete template with two-click confirmation', async () => {
     // Override mock to handle DELETE
     (global.fetch as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
-      if (typeof url === 'string' && url.startsWith('/api/templates/') && options?.method === 'DELETE') {
+      if (typeof url === 'string' && url.startsWith('/api/v1/templates/') && options?.method === 'DELETE') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       }
       return defaultMockFetch(url, options);
@@ -133,13 +133,13 @@ describe('Templates', () => {
     expect(deleteButton).toHaveTextContent('Confirm?');
 
     // DELETE should NOT have been called yet
-    expect(global.fetch).not.toHaveBeenCalledWith('/api/templates/template-1', expect.objectContaining({ method: 'DELETE' }));
+    expect(global.fetch).not.toHaveBeenCalledWith('/api/v1/templates/template-1', expect.objectContaining({ method: 'DELETE' }));
 
     // Second click actually deletes
     fireEvent.click(deleteButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/templates/template-1', expect.objectContaining({
+      expect(global.fetch).toHaveBeenCalledWith('/api/v1/templates/template-1', expect.objectContaining({
         method: 'DELETE',
       }));
     });
@@ -156,13 +156,13 @@ describe('Templates', () => {
     fireEvent.click(deleteButton);
 
     // Only first click happened — should not have called DELETE
-    expect(global.fetch).not.toHaveBeenCalledWith('/api/templates/template-1', expect.objectContaining({ method: 'DELETE' }));
+    expect(global.fetch).not.toHaveBeenCalledWith('/api/v1/templates/template-1', expect.objectContaining({ method: 'DELETE' }));
   });
 
   it('handles create new template with inline form', async () => {
     // Override mock to handle POST
     (global.fetch as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
-      if (url === '/api/templates' && options?.method === 'POST') {
+      if (url === '/api/v1/templates' && options?.method === 'POST') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       }
       return defaultMockFetch(url, options);
@@ -191,7 +191,7 @@ describe('Templates', () => {
     fireEvent.click(screen.getByText('Create'));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/templates', expect.objectContaining({
+      expect(global.fetch).toHaveBeenCalledWith('/api/v1/templates', expect.objectContaining({
         method: 'POST',
       }));
     });

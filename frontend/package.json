@@ -11,6 +11,7 @@
     "build-and-run": "npm run build && cd .. && python3 npuchat.py"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.90.21",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "react": "^18.2.0",

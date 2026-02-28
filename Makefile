@@ -1,6 +1,6 @@
 # Makefile for NPU Chat project
 
-.PHONY: help test lint lint-fix build-frontend lint-frontend test-frontend run all install install-test clean db-migrate db-upgrade db-downgrade db-history db-stamp
+.PHONY: help test lint lint-fix build-frontend lint-frontend test-frontend run all install install-test clean db-migrate db-upgrade db-downgrade db-history db-stamp docker-build docker-run docker-stop test-e2e
 
 help: ## Show this help message
 	@echo "Available targets:"
@@ -52,8 +52,19 @@ db-history: ## Show migration history
 db-stamp: ## Stamp DB with current head (usage: make db-stamp rev=head)
 	flask db stamp $(or $(rev),head)
 
+docker-build: ## Build Docker image
+	docker build -t npuchat .
+
+docker-run: ## Run Docker container
+	docker compose up -d
+
+docker-stop: ## Stop Docker container
+	docker compose down
+
+test-e2e: ## Run Playwright E2E tests
+	cd e2e && npx playwright test
+
 clean: ## Clean build artifacts
 	rm -rf static/dist
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
-

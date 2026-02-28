@@ -7,8 +7,9 @@ import pytest
 # Ensure project root is on sys.path so tests can import npuchat
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from npuchat import create_app
 from models import db as _db
+from npuchat import create_app
+
 
 @pytest.fixture(scope='function')
 def client():
@@ -17,6 +18,7 @@ def client():
     """
     app = create_app(run_migrations=False)
     app.config['TESTING'] = True
+    app.config['RATELIMIT_ENABLED'] = False
     with app.app_context():
         _db.create_all()
         yield app.test_client()
