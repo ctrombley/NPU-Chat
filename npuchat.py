@@ -38,10 +38,10 @@ def create_app(run_migrations=True):
             try:
                 upgrade()
             except Exception:
-                # Fallback: create tables directly if migrations fail
-                db.create_all()
-        else:
-            db.create_all()
+                pass
+        # Ensure all tables exist (covers fresh DB, failed migrations,
+        # and corrupt alembic_version that skips migrations)
+        db.create_all()
         TemplateService.ensure_default_template()
 
     app.config['SWAGGER'] = {
