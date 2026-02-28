@@ -24,13 +24,18 @@ class TestChatManagement:
         assert data['attributes']['name'] == 'New Test Chat'
         assert 'created_at' in data['attributes']
 
-    def test_create_chat_missing_name(self, client):
-        """Test chat creation with missing name"""
+    def test_create_chat_auto_name(self, client):
+        """Test chat creation with auto-generated name"""
         response = jsonapi_post(client, '/api/v1/chats', 'chats', {})
 
-        assert response.status_code == 400
-        body = json.loads(response.data)
-        assert 'errors' in body
+        assert response.status_code == 201
+        data = get_jsonapi_data(response)
+        assert data['attributes']['name'] == 'Chat 1'
+
+        # Second auto-named chat should be Chat 2
+        response2 = jsonapi_post(client, '/api/v1/chats', 'chats', {})
+        data2 = get_jsonapi_data(response2)
+        assert data2['attributes']['name'] == 'Chat 2'
 
     def test_list_chats_empty(self, client):
         """Test listing chats when none exist"""

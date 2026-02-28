@@ -3,11 +3,11 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const listItemVariants = cva(
-  'flex justify-between items-center p-2.5 cursor-pointer border-b border-gray-600 transition-colors hover:bg-gray-700',
+  'flex justify-between items-center p-2.5 cursor-pointer border-b border-tn-border transition-colors hover:bg-tn-bg-highlight',
   {
     variants: {
       active: {
-        true: 'bg-gray-600 border-l-4 border-accent',
+        true: 'bg-tn-selection border-l-4 border-l-tn-blue',
         false: '',
       },
     },

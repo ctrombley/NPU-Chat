@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import ChatList from './components/ChatList';
 import ChatMessages from './components/ChatMessages';
 import MessageInput from './components/MessageInput';
@@ -6,21 +6,24 @@ import Templates from './components/Templates';
 import { Message } from './types';
 import { useChats, useCreateChat, useDeleteChat, useToggleFavorite } from './hooks/useChats';
 import { useMessages } from './hooks/useMessages';
-import { useSendMessage } from './hooks/useSearch';
+import { sendMessageStream } from './api';
+import { useQueryClient } from '@tanstack/react-query';
 
 function App() {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
-  const [isCreatingChat, setIsCreatingChat] = useState(false);
-  const [newChatName, setNewChatName] = useState('');
   const [optimisticMessages, setOptimisticMessages] = useState<Message[]>([]);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(220);
+  const isResizing = useRef(false);
+  const streamingTextRef = useRef('');
+  const queryClient = useQueryClient();
 
   const { data: chats = [] } = useChats();
   const { data: serverMessages = [] } = useMessages(currentChatId);
   const createChatMutation = useCreateChat();
   const deleteChatMutation = useDeleteChat();
   const toggleFavoriteMutation = useToggleFavorite();
-  const sendMessageMutation = useSendMessage();
 
   // Select first chat when chats load and none is selected
   useEffect(() => {
@@ -29,38 +32,42 @@ function App() {
     }
   }, [chats, currentChatId]);
 
-  // Merge server messages with optimistic messages
+  // Show optimistic messages while streaming, otherwise show server messages
   const currentMessages = optimisticMessages.length > 0 ? optimisticMessages : serverMessages;
 
-  // Clear optimistic messages when server messages update after a send
-  useEffect(() => {
-    if (!sendMessageMutation.isPending && optimisticMessages.length > 0) {
-      setOptimisticMessages([]);
-    }
-  }, [sendMessageMutation.isPending, optimisticMessages.length]);
+  // Sidebar resize handlers
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
 
-  const handleNewChat = () => {
-    setIsCreatingChat(true);
-    setNewChatName('');
-  };
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing.current) return;
+      const newWidth = Math.max(120, Math.min(480, e.clientX));
+      setSidebarWidth(newWidth);
+    };
 
-  const handleCreateChatSubmit = async () => {
-    const name = newChatName.trim();
-    if (!name) return;
-    setIsCreatingChat(false);
-    setNewChatName('');
+    const handleMouseUp = () => {
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, []);
+
+  const handleNewChat = async () => {
     try {
-      const chatObj = await createChatMutation.mutateAsync(name);
+      const chatObj = await createChatMutation.mutateAsync();
       setCurrentChatId(chatObj.id);
       setOptimisticMessages([]);
     } catch (error) {
       console.error('Failed to create chat:', error);
     }
-  };
-
-  const handleCreateChatCancel = () => {
-    setIsCreatingChat(false);
-    setNewChatName('');
   };
 
   const handleSwitchChat = (chatId: string) => {
@@ -95,46 +102,71 @@ function App() {
 
   const handleSendMessage = async (messageText: string) => {
     if (!currentChatId) return;
+
     const userMessage: Message = { type: 'sent', text: messageText, timestamp: Date.now() };
-    setOptimisticMessages([...serverMessages, userMessage]);
+    const botMessage: Message = { type: 'received', text: '', timestamp: Date.now() };
+
+    // Show the user message + an empty bot bubble immediately
+    const messagesWithUser = [...serverMessages, userMessage, botMessage];
+    setOptimisticMessages(messagesWithUser);
+    setIsStreaming(true);
+    streamingTextRef.current = '';
 
     try {
-      const data = await sendMessageMutation.mutateAsync({
-        inputText: messageText,
-        sessionId: currentChatId,
-      });
-      const botMessage: Message = { type: 'received', text: data.content, timestamp: Date.now() };
-      setOptimisticMessages(prev => [...prev, botMessage]);
+      await sendMessageStream(
+        messageText,
+        currentChatId,
+        (chunk) => {
+          // Accumulate streamed text and update the bot message
+          streamingTextRef.current += chunk;
+          const updatedBot: Message = { ...botMessage, text: streamingTextRef.current };
+          setOptimisticMessages([...serverMessages, userMessage, updatedBot]);
+        },
+        (sessionId) => {
+          // Streaming done — invalidate queries so server messages take over
+          setIsStreaming(false);
+          setOptimisticMessages([]);
+          streamingTextRef.current = '';
+          queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
+          queryClient.invalidateQueries({ queryKey: ['chats'] });
+        },
+      );
     } catch (error) {
       console.error('Failed to send message:', error);
+      setIsStreaming(false);
+      setOptimisticMessages([]);
+      streamingTextRef.current = '';
     }
   };
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white font-bauhaus overflow-hidden">
-      {showTemplates ? (
-        <Templates onBack={() => setShowTemplates(false)} />
-      ) : (
-        <ChatList
-          chats={chats}
-          currentChatId={currentChatId}
-          onNewChat={handleNewChat}
-          onSwitchChat={handleSwitchChat}
-          onDeleteChat={handleDeleteChat}
-          onToggleFavorite={handleToggleFavorite}
-          onShowTemplates={() => setShowTemplates(true)}
-          isCreatingChat={isCreatingChat}
-          newChatName={newChatName}
-          onNewChatNameChange={setNewChatName}
-          onCreateChatSubmit={handleCreateChatSubmit}
-          onCreateChatCancel={handleCreateChatCancel}
-        />
-      )}
+    <div
+      className="flex h-screen bg-tn-bg text-tn-fg font-bauhaus overflow-hidden"
+      style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
+    >
+      <ChatList
+        chats={chats}
+        currentChatId={currentChatId}
+        onNewChat={handleNewChat}
+        onSwitchChat={handleSwitchChat}
+        onDeleteChat={handleDeleteChat}
+        onToggleFavorite={handleToggleFavorite}
+        onShowTemplates={() => setShowTemplates(true)}
+        sidebarWidth={sidebarWidth}
+      />
+      <div
+        className="resize-handle"
+        onMouseDown={handleResizeStart}
+      />
       <ChatMessages messages={currentMessages} />
       <MessageInput
         currentChatId={currentChatId}
         onMessageSent={handleSendMessage}
+        isLoading={isStreaming}
       />
+      {showTemplates && (
+        <Templates onClose={() => setShowTemplates(false)} />
+      )}
     </div>
   );
 }

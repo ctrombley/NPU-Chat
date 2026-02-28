@@ -8,11 +8,11 @@ const buttonVariants = cva(
     variants: {
       variant: {
         primary:
-          'bg-accent text-white hover:bg-accent-hover',
+          'bg-tn-blue text-tn-bg-dark hover:bg-tn-cyan',
         secondary:
-          'bg-gray-600 text-white hover:bg-gray-700',
+          'bg-tn-bg-highlight text-tn-fg-dark hover:bg-tn-border',
         send:
-          'p-3 border border-purple-800 bg-gray-900 text-purple-500 rounded-3xl cursor-pointer text-2xl hover:text-white hover:shadow-lg hover:shadow-green-400 transition-colors disabled:hover:shadow-none disabled:hover:text-purple-500',
+          'p-3 border border-tn-border bg-tn-bg text-tn-blue rounded-3xl cursor-pointer text-2xl hover:text-tn-cyan hover:shadow-lg hover:shadow-tn-blue/30 transition-colors disabled:hover:shadow-none disabled:hover:text-tn-comment',
       },
       size: {
         sidebar: 'w-full p-2.5 m-2.5',
@@ -43,12 +43,12 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 Button.displayName = 'Button';
 
 const iconButtonVariants = cva(
-  'bg-none border-none text-gray-500 text-base cursor-pointer p-0.5 rounded transition-colors',
+  'bg-none border-none text-tn-comment text-base cursor-pointer p-0.5 rounded transition-colors',
   {
     variants: {
       variant: {
-        danger: 'hover:text-red-400 hover:bg-gray-600',
-        favorite: 'hover:text-yellow-400 hover:bg-gray-600 mr-1',
+        danger: 'hover:text-tn-red hover:bg-tn-bg-highlight',
+        favorite: 'hover:text-tn-yellow hover:bg-tn-bg-highlight mr-1',
       },
     },
     defaultVariants: {

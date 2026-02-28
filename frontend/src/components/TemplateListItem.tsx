@@ -19,8 +19,8 @@ const TemplateListItem: React.FC<TemplateListItemProps> = ({
   return (
     <ListItem>
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-white truncate">{template.name}</div>
-        <div className="text-xs text-gray-400 mt-1">
+        <div className="text-sm font-medium text-tn-fg truncate">{template.name}</div>
+        <div className="text-xs text-tn-comment mt-1">
           <div className="truncate">Prefix: {template.prefix}</div>
           <div className="truncate">Postfix: {template.postfix}</div>
         </div>

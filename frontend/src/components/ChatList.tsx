@@ -12,11 +12,7 @@ interface ChatListProps {
   onDeleteChat: (chatId: string) => void;
   onToggleFavorite: (chatId: string, isFavorite: boolean) => void;
   onShowTemplates: () => void;
-  isCreatingChat?: boolean;
-  newChatName?: string;
-  onNewChatNameChange?: (name: string) => void;
-  onCreateChatSubmit?: () => void;
-  onCreateChatCancel?: () => void;
+  sidebarWidth?: number;
 }
 
 const ChatList: React.FC<ChatListProps> = ({
@@ -27,14 +23,10 @@ const ChatList: React.FC<ChatListProps> = ({
   onDeleteChat,
   onToggleFavorite,
   onShowTemplates,
-  isCreatingChat,
-  newChatName,
-  onNewChatNameChange,
-  onCreateChatSubmit,
-  onCreateChatCancel,
+  sidebarWidth,
 }) => {
   return (
-    <Sidebar title="Chats">
+    <Sidebar title="Chats" style={sidebarWidth ? { width: sidebarWidth } : undefined}>
       <ul className="list-none p-0 m-0">
         {chats.map((chat, index) => (
           <ChatListItem
@@ -48,36 +40,13 @@ const ChatList: React.FC<ChatListProps> = ({
           />
         ))}
       </ul>
-      {isCreatingChat ? (
-        <div className="flex gap-2 px-2">
-          <input
-            type="text"
-            value={newChatName || ''}
-            onChange={(e) => onNewChatNameChange?.(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') onCreateChatSubmit?.();
-              if (e.key === 'Escape') onCreateChatCancel?.();
-            }}
-            placeholder="Chat name..."
-            autoFocus
-            className="flex-1 px-2 py-1 bg-gray-700 text-white border border-gray-600 rounded text-sm focus:outline-none focus:border-blue-500"
-          />
-          <Button variant="primary" onClick={onCreateChatSubmit}>
-            OK
-          </Button>
-          <Button variant="secondary" onClick={onCreateChatCancel}>
-            Cancel
-          </Button>
-        </div>
-      ) : (
-        <Button
-          variant="primary"
-          onClick={onNewChat}
-          aria-label="Create new chat"
-        >
-          New Chat
-        </Button>
-      )}
+      <Button
+        variant="primary"
+        onClick={onNewChat}
+        aria-label="Create new chat"
+      >
+        New Chat
+      </Button>
       <Button
         variant="secondary"
         onClick={onShowTemplates}

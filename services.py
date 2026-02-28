@@ -15,9 +15,22 @@ logger = logging.getLogger(__name__)
 
 class ChatService:
     @staticmethod
-    def create_chat(name: str) -> Chat:
+    def _next_default_name() -> str:
+        existing = db.session.query(Chat.name).filter(Chat.name.like('Chat %')).all()
+        max_num = 0
+        for (name,) in existing:
+            parts = name.split(' ', 1)
+            if len(parts) == 2 and parts[1].isdigit():
+                max_num = max(max_num, int(parts[1]))
+        return f"Chat {max_num + 1}"
+
+    @staticmethod
+    def create_chat(name: Optional[str] = None) -> Chat:
+        auto_named = not name
+        if auto_named:
+            name = ChatService._next_default_name()
         chat_id = str(uuid.uuid4())
-        chat = Chat(id=chat_id, name=name, needs_naming=False)
+        chat = Chat(id=chat_id, name=name, needs_naming=auto_named)
         db.session.add(chat)
         db.session.commit()
         return chat
@@ -118,14 +131,17 @@ class TemplateService:
 
 class LLMService:
     @staticmethod
-    def feed_the_llama(query: str, prefix: str, postfix: str) -> str:
-        config = current_app.config
-        json_data = {
+    def _build_request(query: str, prefix: str, postfix: str) -> Dict[str, Any]:
+        return {
             'PROMPT_TEXT_PREFIX': prefix,
             'input_str': str(query) + ' ',
             'PROMPT_TEXT_POSTFIX': postfix,
         }
 
+    @staticmethod
+    def feed_the_llama(query: str, prefix: str, postfix: str) -> str:
+        config = current_app.config
+        json_data = LLMService._build_request(query, prefix, postfix)
         headers = {'Content-Type': 'application/json'}
 
         try:
@@ -144,6 +160,66 @@ class LLMService:
         except requests.exceptions.RequestException as e:
             error_msg = f"An error occurred: {str(e)} ---- is the server online?"
             return error_msg
+
+    @staticmethod
+    def feed_the_llama_stream(query: str, prefix: str, postfix: str):
+        """Generator that yields chunks of the LLM response for SSE streaming."""
+        config = current_app.config
+        json_data = LLMService._build_request(query, prefix, postfix)
+        headers = {'Content-Type': 'application/json'}
+
+        try:
+            resp = requests.post(
+                f"http://{config['NPU_ADDRESS']}:{config['NPU_PORT']}",
+                headers=headers,
+                json=json_data,
+                timeout=config['CONNECTION_TIMEOUT'],
+                stream=True,
+            )
+            resp.raise_for_status()
+
+            # Try to consume as a chunked stream first
+            buffer = b""
+            got_chunks = False
+            for chunk in resp.iter_content(chunk_size=64):
+                if chunk:
+                    got_chunks = True
+                    buffer += chunk
+                    # Try to decode and yield partial text
+                    try:
+                        partial = buffer.decode('utf-8')
+                        yield partial
+                        buffer = b""
+                    except UnicodeDecodeError:
+                        # Incomplete multi-byte char, wait for more data
+                        continue
+
+            # If we got chunked data, flush any remaining buffer
+            if got_chunks and buffer:
+                try:
+                    yield buffer.decode('utf-8', errors='replace')
+                except Exception:
+                    pass
+                return
+
+            # If iter_content gave us the full response at once (no chunking),
+            # parse JSON and yield the content in small pieces
+            if not got_chunks:
+                full_text = resp.text
+                try:
+                    resp_json = resp.json()
+                    full_text = resp_json.get('content', full_text)
+                except (ValueError, KeyError):
+                    pass
+                # Yield word-by-word for a typing effect
+                words = full_text.split(' ')
+                for i, word in enumerate(words):
+                    yield word + (' ' if i < len(words) - 1 else '')
+
+        except Timeout:
+            yield "Request timed out. Please try again later."
+        except requests.exceptions.RequestException as e:
+            yield f"An error occurred: {str(e)} ---- is the server online?"
 
 class NamingService:
     @staticmethod

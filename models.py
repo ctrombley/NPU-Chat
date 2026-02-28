@@ -35,14 +35,10 @@ class Chat(db.Model):
             'created_at': int(self.created_at.timestamp() * 1000) if self.created_at else None
         }
 
-    def add_message(self, role, content, context_depth):
+    def add_message(self, role, content):
         new_position = len(self.messages)
         msg = Message(chat_id=self.id, role=role, content=content, position=new_position)
         db.session.add(msg)
-        if len(self.messages) + 1 > context_depth:
-            oldest = Message.query.filter_by(chat_id=self.id).order_by(Message.position).first()
-            if oldest:
-                db.session.delete(oldest)
         db.session.commit()
 
 class Message(db.Model):

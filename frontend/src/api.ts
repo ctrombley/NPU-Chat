@@ -52,10 +52,12 @@ export async function listChats(): Promise<Chat[]> {
   }));
 }
 
-export async function createChat(name: string): Promise<Chat> {
+export async function createChat(name?: string): Promise<Chat> {
+  const attrs: Record<string, string> = {};
+  if (name) attrs.name = name;
   const response = await apiFetch('/api/v1/chats', {
     method: 'POST',
-    body: JSON.stringify(wrapResource('chats', { name })),
+    body: JSON.stringify(wrapResource('chats', attrs)),
   });
   if (!response.ok) throw new Error('Failed to create chat');
   const doc: JsonApiDocument<ChatAttributes> = await response.json();
@@ -152,4 +154,53 @@ export async function sendMessage(inputText: string, sessionId?: string): Promis
     content: resource.attributes.content,
     session_id: resource.attributes.session_id,
   };
+}
+
+export async function sendMessageStream(
+  inputText: string,
+  sessionId: string,
+  onChunk: (chunk: string) => void,
+  onDone: (sessionId: string) => void,
+): Promise<void> {
+  const attrs: Record<string, string> = { input_text: inputText, session_id: sessionId };
+
+  const response = await apiFetch('/api/v1/search/stream', {
+    method: 'POST',
+    body: JSON.stringify(wrapResource('search-requests', attrs)),
+  });
+
+  if (!response.ok) throw new Error('Failed to send message');
+  if (!response.body) throw new Error('No response body for streaming');
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    // Parse SSE lines from buffer
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const jsonStr = line.slice(6);
+      try {
+        const event = JSON.parse(jsonStr);
+        if (event.done) {
+          onDone(event.session_id);
+          return;
+        }
+        if (event.chunk) {
+          onChunk(event.chunk);
+        }
+      } catch {
+        // Skip malformed events
+      }
+    }
+  }
 }

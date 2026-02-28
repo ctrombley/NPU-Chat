@@ -27,7 +27,7 @@ const Message: React.FC<MessageProps> = ({ message }) => {
       <p className="m-0 p-0">{getCleanText(message.text)}</p>
       {message.type === 'received' && (
         <button
-          className={`p-2.5 inline-block bg-gray-600 text-gray-300 text-lg font-bold font-sans no-underline border border-black rounded shadow-lg transition-all w-10 h-10 leading-5 text-center ${
+          className={`p-2.5 inline-block bg-tn-bg-highlight text-tn-comment text-lg font-bold font-sans no-underline border border-tn-border rounded shadow-lg transition-all w-10 h-10 leading-5 text-center hover:text-tn-fg ${
             copyFeedback ? 'animate' : ''
           }`}
           onClick={handleCopy}

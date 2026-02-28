@@ -53,7 +53,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
   const isDisabled = !currentChatId || isLoading;
 
   return (
-    <form onSubmit={handleSubmit} aria-label="Message form" className="fixed bottom-0 left-48 right-0 bg-transparent p-2.5 flex z-20 max-h-48 overflow-hidden">
+    <form onSubmit={handleSubmit} aria-label="Message form" className="fixed bottom-0 right-0 bg-tn-bg/80 backdrop-blur-sm p-2.5 flex z-20 max-h-48 overflow-hidden" style={{ left: 'var(--sidebar-width, 192px)' }}>
       <div className="message-input-container flex flex-1">
         <label htmlFor="message-input" className="sr-only">
           Type your message
@@ -65,7 +65,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
           value={inputText}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          className="flex-1 p-4 box-border border border-purple-800 rounded-3xl resize-none overflow-y-hidden bg-gray-900 text-white text-base mr-2.5 max-h-40 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+          className="flex-1 p-4 box-border border border-tn-border rounded-3xl resize-none overflow-y-hidden bg-tn-bg-dark text-tn-fg text-base mr-2.5 max-h-40 focus:outline-none focus:ring-2 focus:ring-tn-blue focus:border-tn-blue placeholder:text-tn-comment"
           placeholder={currentChatId ? "Chat..." : "Select a chat to start messaging"}
           disabled={isDisabled}
           aria-disabled={isDisabled}
@@ -78,10 +78,11 @@ const MessageInput: React.FC<MessageInputProps> = ({
           disabled={isDisabled || !inputText.trim()}
           aria-label={isLoading ? "Sending message..." : "Send message"}
         >
-          <div className={`send-icon ${isLoading ? 'hidden' : 'block'}`}>⊛</div>
-          <div className={`loader ${isLoading ? 'block' : 'hidden'}`}>
-            <div className="pupil"></div>
-          </div>
+          {isLoading ? (
+            <div className="loader"></div>
+          ) : (
+            <div className="send-icon">⊛</div>
+          )}
         </Button>
       </div>
     </form>

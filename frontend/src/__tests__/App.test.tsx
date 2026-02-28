@@ -1,3 +1,14 @@
+import { TextEncoder } from 'util';
+import { ReadableStream } from 'stream/web';
+
+// Polyfill for jsdom
+if (typeof globalThis.TextEncoder === 'undefined') {
+  globalThis.TextEncoder = TextEncoder;
+}
+if (typeof globalThis.ReadableStream === 'undefined') {
+  (globalThis as any).ReadableStream = ReadableStream;
+}
+
 import { render, screen, fireEvent, waitFor, act } from '../test-utils';
 import App from '../App';
 
@@ -55,14 +66,13 @@ describe('App Integration', () => {
     });
   });
 
-  it('switches between chats', async () => {
-    // Override mock to also handle POST /api/v1/chats for creating a new chat
+  it('creates a new chat when New Chat is clicked', async () => {
     (global.fetch as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
       if (url === '/api/v1/chats' && options?.method === 'POST') {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve(
-            jsonapiResource('chats', 'chat-2', { name: 'New Chat', emoji: '', is_favorite: false, message_count: 0 })
+            jsonapiResource('chats', 'chat-2', { name: 'Chat 1', emoji: '', is_favorite: false, message_count: 0 })
           ),
         });
       }
@@ -75,14 +85,9 @@ describe('App Integration', () => {
       expect(screen.getByRole('button', { name: 'Create new chat' })).toBeInTheDocument();
     });
 
-    // Click New Chat to show inline input
-    const newChatButton = screen.getByRole('button', { name: 'Create new chat' });
-    fireEvent.click(newChatButton);
-
-    // Type a name in the inline input and submit
-    const nameInput = screen.getByPlaceholderText('Chat name...');
-    fireEvent.change(nameInput, { target: { value: 'New Chat' } });
-    fireEvent.click(screen.getByText('OK'));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create new chat' }));
+    });
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith('/api/v1/chats', expect.objectContaining({
@@ -91,18 +96,26 @@ describe('App Integration', () => {
     });
   });
 
-  it('sends messages successfully', async () => {
-    // Override mock to also handle POST /api/v1/search
+  it('sends messages successfully via streaming', async () => {
+    // Create a mock SSE response body
+    const sseData = [
+      'data: {"session_id":"chat-1","chunk":"Hello "}\n\n',
+      'data: {"session_id":"chat-1","chunk":"from bot"}\n\n',
+      'data: {"session_id":"chat-1","done":true}\n\n',
+    ].join('');
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(sseData));
+        controller.close();
+      },
+    });
+
     (global.fetch as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
-      if (url === '/api/v1/search' && options?.method === 'POST') {
+      if (url === '/api/v1/search/stream' && options?.method === 'POST') {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve(
-            jsonapiResource('search-results', 'chat-1', {
-              content: 'Hello from bot',
-              session_id: 'chat-1',
-            })
-          ),
+          body: stream,
         });
       }
       return defaultMockFetch(url, options);
@@ -110,7 +123,6 @@ describe('App Integration', () => {
 
     render(<App />);
 
-    // Wait for chats to load and chat to be selected
     await waitFor(() => {
       expect(screen.getByText(/Test Chat/)).toBeInTheDocument();
     });
@@ -124,13 +136,13 @@ describe('App Integration', () => {
     });
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/v1/search', expect.objectContaining({
+      expect(global.fetch).toHaveBeenCalledWith('/api/v1/search/stream', expect.objectContaining({
         method: 'POST',
       }));
     });
   });
 
-  it('handles template management', async () => {
+  it('handles template management modal', async () => {
     render(<App />);
 
     await waitFor(() => {
@@ -140,7 +152,6 @@ describe('App Integration', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Templates')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Create new template' })).toBeInTheDocument();
     });
   });
 
@@ -187,7 +198,6 @@ describe('App Integration', () => {
   it('handles network errors gracefully', async () => {
     const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-    // Override mock to reject on POST /api/v1/chats
     (global.fetch as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
       if (url === '/api/v1/chats' && options?.method === 'POST') {
         return Promise.reject(new Error('Network error'));
@@ -201,16 +211,8 @@ describe('App Integration', () => {
       expect(screen.getByRole('button', { name: 'Create new chat' })).toBeInTheDocument();
     });
 
-    // Click New Chat to show inline input
-    const newChatButton = screen.getByRole('button', { name: 'Create new chat' });
-    fireEvent.click(newChatButton);
-
-    // Type name and submit
-    const nameInput = screen.getByPlaceholderText('Chat name...');
-    fireEvent.change(nameInput, { target: { value: 'Test' } });
-
     await act(async () => {
-      fireEvent.click(screen.getByText('OK'));
+      fireEvent.click(screen.getByRole('button', { name: 'Create new chat' }));
     });
 
     await waitFor(() => {

@@ -4,28 +4,28 @@
 
 @layer base {
   :root {
-    --color-chat-bg: 35 35 35;
-    --color-sidebar-bg: 26 26 26;
-    --color-message-sent: 56 56 56;
-    --color-message-received: 17 17 17;
-    --color-accent: 152 5 181;
-    --color-accent-hover: 176 37 209;
+    --color-chat-bg: 26 27 38;
+    --color-sidebar-bg: 22 22 30;
+    --color-message-sent: 52 59 88;
+    --color-message-received: 30 31 46;
+    --color-accent: 122 162 247;
+    --color-accent-hover: 125 207 255;
   }
 }
 
 /* Custom styles for markdown rendering */
 code {
-  @apply text-green-400 border-0;
+  @apply text-tn-green border-0;
 }
 pre {
-  @apply text-white p-2 border border-gray-700 rounded-lg;
+  @apply text-tn-fg p-2 border border-tn-border rounded-lg;
 }
 code, pre {
-  @apply bg-black;
+  @apply bg-tn-bg-dark;
 }
 
 a {
-  @apply text-green-400;
+  @apply text-tn-cyan;
 }
 
 ul {
@@ -37,7 +37,7 @@ li {
 }
 
 li::marker {
-  @apply text-green-400;
+  @apply text-tn-cyan;
 }
 
 /* Scrollbars */
@@ -46,15 +46,16 @@ li::marker {
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-gray-800;
+  background: #1a1b26;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-gray-600;
+  background: #414868;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-900;
+  background: #565f89;
 }
 
 /* Copy button animation */
@@ -66,77 +67,43 @@ li::marker {
 @keyframes pulse {
   0% {
     transform: scale(1);
-    box-shadow: 0 0 10px rgba(128, 0, 128, 0.5);
+    box-shadow: 0 0 10px rgba(122, 162, 247, 0.4);
   }
   50% {
     transform: scale(1.1);
-    box-shadow: 0 0 20px rgba(128, 0, 128, 0.7);
+    box-shadow: 0 0 20px rgba(122, 162, 247, 0.6);
   }
   100% {
     transform: scale(1);
-    box-shadow: 0 0 10px rgba(128, 0, 128, 0.5);
+    box-shadow: 0 0 10px rgba(122, 162, 247, 0.4);
   }
 }
 
-/* Spinning animation on send button */
+/* Loading spinner */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .loader {
-  width: 30px;
-  aspect-ratio: 1;
-  display: grid;
-  mask: conic-gradient(from 45deg, #0001, #000);
-  animation: load 1s steps(10) infinite;
-  --_g: linear-gradient(#9805b5 0 0) 50%;
-  background:
-    var(--_g)/34% 8% space no-repeat,
-    var(--_g)/8% 34% no-repeat space;
-  position: relative;
-  z-index: 1;
-  display: none;
-}
-
-.pupil {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #414868;
+  border-top-color: #7aa2f7;
   border-radius: 50%;
-  background-color: black;
-  animation: pupilAnimation 2s infinite alternate;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 2;
+  animation: spin 0.8s linear infinite;
 }
 
-@keyframes pupilAnimation {
-  0% {
-    width: 10px;
-    height: 8px;
-  }
-  25% {
-    width: 15px;
-    height: 13px;
-  }
-  50% {
-    width: 20px;
-    height: 18px;
-  }
-  100% {
-    width: 25px;
-    height: 23px;
-  }
+/* Resize handle */
+.resize-handle {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background-color 0.2s;
+  flex-shrink: 0;
 }
 
-.loader:before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 50% 50%, #000000 20%, #9805b5 20%);
-  transform: rotate(45deg);
-  animation: load 10s steps(10) infinite;
-  z-index: -1;
-}
-
-@keyframes load {
-  to {
-    transform: rotate(1turn);
-  }
+.resize-handle:hover,
+.resize-handle.active {
+  background: #7aa2f7;
 }
 

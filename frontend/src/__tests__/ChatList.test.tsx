@@ -32,7 +32,7 @@ describe('ChatList', () => {
     render(<ChatList {...mockProps} />);
 
     const activeChatItem = screen.getByText('🤖 First Chat').closest('li');
-    expect(activeChatItem).toHaveClass('border-l-4', 'border-accent');
+    expect(activeChatItem).toHaveClass('border-l-4', 'border-l-tn-blue');
   });
 
   it('calls onNewChat when New Chat button is clicked', () => {

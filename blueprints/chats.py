@@ -54,7 +54,7 @@ def create_chat():
     if error:
         return error
 
-    chat = ChatService.create_chat(data.name)
+    chat = ChatService.create_chat(data.name if data.name else None)
     return jsonapi_response(
         serialize_resource('chats', chat.id, {
             'name': chat.name,

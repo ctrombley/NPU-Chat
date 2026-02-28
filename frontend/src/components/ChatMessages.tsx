@@ -14,8 +14,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages }) => {
   }, [messages]);
 
   return (
-    <div className="chat-messages flex-1 overflow-y-auto overflow-x-hidden mb-16 relative" data-testid="chat-messages">
-      <div className="absolute inset-0 bg-chat-bg opacity-10 radial-gradient"></div>
+    <div className="chat-messages flex-1 overflow-y-auto overflow-x-hidden mb-16 relative bg-chat-bg" data-testid="chat-messages">
       <div className="relative">
         {messages.map((message, index) => (
           <Message key={message.id || index} message={message} />

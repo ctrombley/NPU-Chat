@@ -1,7 +1,8 @@
+import json
 import logging
 import time
 
-from flask import Blueprint, current_app, request
+from flask import Blueprint, Response, current_app, request
 
 from extensions import limiter
 from jsonapi import (
@@ -81,6 +82,122 @@ def search():
     return resp
 
 
+@search_bp.route('/search/stream', methods=['POST'])
+@limiter.limit("10 per minute")
+def search_stream():
+    """Send a message and stream the response via SSE."""
+    data, error = validate_jsonapi_request(request, SearchRequest)
+    if error:
+        return error
+
+    question = data.input_text
+    if not question.strip():
+        return jsonapi_error_response(400, 'Bad Request', 'Empty input is not allowed.')
+
+    session_id = data.session_id
+    config = current_app.config
+    context_depth = config['CONTEXT_DEPTH']
+
+    if not session_id:
+        chat = ChatService.create_chat("New Chat")
+        chat.needs_naming = True
+        db.session.commit()
+        session_id = chat.id
+
+    chat = ChatService.get_chat(session_id)
+    if not chat:
+        chat = ChatService.create_chat("New Chat")
+        chat.needs_naming = True
+        db.session.commit()
+        session_id = chat.id
+
+    # Quick commands — return as a single SSE event, not streamed
+    cmd = question.strip().lower()
+    quick_commands = {
+        'context': lambda: _context_response(session_id),
+        'clear': lambda: _clear_response(session_id),
+        'off': lambda: _off_response(session_id),
+        'on': lambda: _on_response(),
+        'help': lambda: _help_response(),
+    }
+    if cmd in quick_commands:
+        content = quick_commands[cmd]()
+        def single_event():
+            yield f"data: {json.dumps({'session_id': session_id, 'chunk': content})}\n\n"
+            yield f"data: {json.dumps({'session_id': session_id, 'done': True})}\n\n"
+        return Response(single_event(), mimetype='text/event-stream',
+                        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+    # Get template
+    template = TemplateService.get_template(chat.template_id)
+    if not template:
+        template = TemplateService.get_template('default')
+
+    chat.add_message('user', question)
+
+    messages = ChatService.get_chat_messages(session_id) or []
+    query = question
+    if config['USE_CONTEXT'] and len(messages) > 1:
+        history_msgs = messages[-context_depth * 2:-1] if context_depth else messages[:-1]
+        llm_output_history = ""
+        for msg in history_msgs:
+            llm_output_history += f"```\n{msg.content}\n```\n"
+        query = llm_output_history + question
+
+    # We need to capture these for the generator closure
+    chat_id = chat.id
+    needs_naming = chat.needs_naming
+    prefix = template.prefix
+    postfix = template.postfix
+
+    def generate():
+        full_response = []
+        for chunk in LLMService.feed_the_llama_stream(query, prefix, postfix):
+            full_response.append(chunk)
+            yield f"data: {json.dumps({'session_id': chat_id, 'chunk': chunk})}\n\n"
+
+        # Save the complete response
+        complete_text = ''.join(full_response)
+        with current_app.app_context():
+            c = ChatService.get_chat(chat_id)
+            if c:
+                c.add_message('assistant', complete_text)
+                if needs_naming:
+                    NamingService.generate_name(c)
+
+        yield f"data: {json.dumps({'session_id': chat_id, 'done': True})}\n\n"
+
+    return Response(generate(), mimetype='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+
+def _context_response(session_id):
+    messages = ChatService.get_chat_messages(session_id) or []
+    return "".join(f"```\n[{m.role}] {m.content}\n```\n" for m in messages)
+
+def _clear_response(session_id):
+    Message.query.filter_by(chat_id=session_id).delete()
+    db.session.commit()
+    return "context cleared."
+
+def _off_response(session_id):
+    Message.query.filter_by(chat_id=session_id).delete()
+    db.session.commit()
+    return "context off. Note: context toggle is a server-wide setting via settings.ini."
+
+def _on_response():
+    return "context on. Note: context toggle is a server-wide setting via settings.ini."
+
+def _help_response():
+    return (
+        "Available quick commands:\n"
+        "- context: show current chat context messages\n"
+        "- clear: clear current chat context\n"
+        "- on / off: enable or disable use of chat context for LLM calls\n"
+        "- help: show this message\n"
+    )
+
+
 def web_request_logic(session_id, question):
     config = current_app.config
     context_depth = config['CONTEXT_DEPTH']
@@ -138,12 +255,12 @@ def web_request_logic(session_id, question):
     if not template:
         template = TemplateService.get_template('default')
 
-    chat.add_message('user', question, context_depth)
+    chat.add_message('user', question)
 
     messages = ChatService.get_chat_messages(session_id) or []
     query = question
     if config['USE_CONTEXT'] and len(messages) > 1:
-        history_msgs = messages[:-1]
+        history_msgs = messages[-context_depth * 2:-1] if context_depth else messages[:-1]
         llm_output_history = ""
         for msg in history_msgs:
             llm_output_history += f"```\n{msg.content}\n```\n"
@@ -151,7 +268,7 @@ def web_request_logic(session_id, question):
 
     raw_answer = LLMService.feed_the_llama(query, template.prefix, template.postfix)
 
-    chat.add_message('assistant', raw_answer, context_depth)
+    chat.add_message('assistant', raw_answer)
 
     if chat.needs_naming:
         NamingService.generate_name(chat)

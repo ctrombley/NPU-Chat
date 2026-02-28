@@ -70,7 +70,7 @@ describe('ChatMessages', () => {
 
     const chatMessagesDiv = screen.getByTestId('chat-messages');
     expect(chatMessagesDiv).toBeInTheDocument();
-    expect(chatMessagesDiv.children).toHaveLength(2); // Background div and relative div
+    expect(chatMessagesDiv.children).toHaveLength(1); // Relative div with scroll anchor
   });
 
   it('auto-scrolls to bottom when messages change', () => {

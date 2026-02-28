@@ -5,11 +5,15 @@ interface SidebarProps {
   title: string;
   children: ReactNode;
   className?: string;
+  style?: React.CSSProperties;
 }
 
-const Sidebar = ({ title, children, className }: SidebarProps) => (
-  <div className={cn('w-48 h-full bg-sidebar-bg border-r border-gray-600 overflow-y-auto z-10', className)}>
-    <h3 className="m-2.5 text-white text-base border-b border-gray-600 pb-1.5">
+const Sidebar = ({ title, children, className, style }: SidebarProps) => (
+  <div
+    className={cn('h-full bg-sidebar-bg border-r border-tn-border overflow-y-auto z-10 flex-shrink-0', className)}
+    style={{ width: 192, minWidth: 120, maxWidth: 480, ...style }}
+  >
+    <h3 className="m-2.5 text-tn-fg text-base border-b border-tn-border pb-1.5">
       {title}
     </h3>
     {children}
