@@ -175,8 +175,11 @@ class LLMService:
                     timeout=config['CONNECTION_TIMEOUT']
                 )
                 resp.raise_for_status()
-                resp_json: Dict[str, Any] = resp.json()
-                answer = resp_json.get('content', '')
+                try:
+                    resp_json: Dict[str, Any] = resp.json()
+                    answer = resp_json.get('content', resp.text)
+                except ValueError:
+                    answer = resp.text
                 return answer
             except Timeout:
                 return "Request timed out. Please try again later."
