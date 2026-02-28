@@ -31,3 +31,6 @@ class Config:
         # Rate limiting
         self.RATELIMIT_DEFAULT = os.environ.get('RATELIMIT_DEFAULT', '200 per day;50 per hour')
         self.RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI', 'memory://')
+
+        # Metadata review
+        self.METADATA_REVIEW_ENABLED = os.environ.get('METADATA_REVIEW_ENABLED', 'True').lower() in ('true', '1', 'yes')

@@ -49,6 +49,7 @@ export async function listChats(): Promise<Chat[]> {
     emoji: c.emoji || '',
     template_id: c.template_id || 'default',
     is_favorite: c.is_favorite || false,
+    metadata: c.metadata || {},
     messages: [],
   }));
 }
@@ -70,13 +71,14 @@ export async function createChat(name?: string, templateId?: string): Promise<Ch
     emoji: resource.attributes.emoji || '',
     template_id: resource.attributes.template_id || 'default',
     is_favorite: resource.attributes.is_favorite || false,
+    metadata: resource.attributes.metadata || {},
     messages: [],
   };
 }
 
 export async function updateChat(
   chatId: string,
-  attrs: Partial<{ name: string; emoji: string; is_favorite: boolean; template_id: string }>
+  attrs: Partial<{ name: string; emoji: string; is_favorite: boolean; template_id: string; metadata: Record<string, unknown> }>
 ): Promise<void> {
   const response = await apiFetch(`/api/v1/chats/${chatId}`, {
     method: 'PATCH',
@@ -100,6 +102,11 @@ export async function getChatMessages(chatId: string): Promise<Message[]> {
     text: m.content,
     timestamp: Date.now(),
   }));
+}
+
+export async function reviewChatMetadata(chatId: string): Promise<void> {
+  const response = await apiFetch(`/api/v1/chats/${chatId}/review-metadata`, { method: 'POST' });
+  if (!response.ok) throw new Error('Failed to review chat metadata');
 }
 
 // --- Templates ---
@@ -175,11 +182,17 @@ export async function sendMessage(inputText: string, sessionId?: string): Promis
   };
 }
 
+export interface ChatUpdate {
+  name: string;
+  emoji: string;
+  metadata?: Record<string, unknown>;
+}
+
 export async function sendMessageStream(
   inputText: string,
   sessionId: string,
   onChunk: (chunk: string) => void,
-  onDone: (sessionId: string) => void,
+  onDone: (sessionId: string, chatUpdate: ChatUpdate | null) => void,
 ): Promise<void> {
   const attrs: Record<string, string> = { input_text: inputText, session_id: sessionId };
 
@@ -211,7 +224,7 @@ export async function sendMessageStream(
       try {
         const event = JSON.parse(jsonStr);
         if (event.done) {
-          onDone(event.session_id);
+          onDone(event.session_id, event.chat_update ?? null);
           return;
         }
         if (event.chunk) {

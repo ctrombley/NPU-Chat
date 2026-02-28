@@ -1,4 +1,4 @@
-from flask import Blueprint, request
+from flask import Blueprint, current_app, request
 
 from jsonapi import (
     jsonapi_error_response,
@@ -10,7 +10,7 @@ from jsonapi import (
 )
 from models import Chat, Message
 from schemas import CreateChatRequest, UpdateChatRequest
-from services import ChatService
+from services import ChatService, LLMService
 
 chats_bp = Blueprint('chats', __name__)
 
@@ -63,6 +63,7 @@ def create_chat():
             'is_favorite': chat.is_favorite,
             'message_count': 0,
             'created_at': int(chat.created_at.timestamp() * 1000) if chat.created_at else None,
+            'metadata': chat.chat_metadata or {},
         }),
         201,
     )
@@ -179,6 +180,7 @@ def update_chat(chat_id):
         data.emoji,
         data.template_id,
         data.is_favorite,
+        data.metadata,
     )
     if not chat:
         return jsonapi_error_response(404, 'Not Found', 'Chat not found')
@@ -188,6 +190,7 @@ def update_chat(chat_id):
         'emoji': chat.emoji,
         'template_id': chat.template_id,
         'is_favorite': chat.is_favorite,
+        'metadata': chat.chat_metadata or {},
     }))
 
 
@@ -254,3 +257,31 @@ def get_chat_messages(chat_id):
             'content': msg.content,
         })
     return jsonapi_response(serialize_collection('messages', items, meta=meta))
+
+
+@chats_bp.route('/chats/<chat_id>/review-metadata', methods=['POST'])
+def review_chat_metadata(chat_id):
+    """Trigger LLM metadata review for a chat (fire-and-forget).
+    ---
+    tags:
+      - chats
+    parameters:
+      - in: path
+        name: chat_id
+        type: string
+        required: true
+    responses:
+      204:
+        description: Review complete (or disabled)
+      404:
+        description: Chat not found
+    """
+    if not current_app.config.get('METADATA_REVIEW_ENABLED', True):
+        return '', 204
+
+    chat = ChatService.get_chat(chat_id)
+    if not chat:
+        return jsonapi_error_response(404, 'Not Found', 'Chat not found')
+
+    LLMService.review_chat_metadata(chat)
+    return '', 204

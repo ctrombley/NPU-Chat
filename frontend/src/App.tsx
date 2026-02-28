@@ -7,7 +7,7 @@ import ChatMetadataModal from './components/ChatMetadataModal';
 import { Message } from './types';
 import { useChats, useCreateChat, useDeleteChat, useToggleFavorite, useUpdateChat } from './hooks/useChats';
 import { useMessages } from './hooks/useMessages';
-import { sendMessageStream } from './api';
+import { sendMessageStream, ChatUpdate } from './api';
 import { useQueryClient } from '@tanstack/react-query';
 
 function App() {
@@ -117,7 +117,7 @@ function App() {
     setEditingChatId(chatId);
   };
 
-  const handleSaveChat = async (chatId: string, attrs: { name?: string; emoji?: string; template_id?: string }) => {
+  const handleSaveChat = async (chatId: string, attrs: { name?: string; emoji?: string; template_id?: string; metadata?: Record<string, unknown> }) => {
     try {
       await updateChatMutation.mutateAsync({ chatId, attrs });
       setEditingChatId(null);
@@ -148,12 +148,18 @@ function App() {
           const updatedBot: Message = { ...botMessage, text: streamingTextRef.current };
           setOptimisticMessages([...serverMessages, userMessage, updatedBot]);
         },
-        (sessionId) => {
+        (sessionId, chatUpdate: ChatUpdate | null) => {
           // Streaming done — invalidate queries so server messages take over
           setIsStreaming(false);
           setOptimisticMessages([]);
           streamingTextRef.current = '';
           queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
+          // Write metadata update directly into cache — no round-trip needed
+          if (chatUpdate) {
+            queryClient.setQueryData<typeof chats>(['chats'], (old = []) =>
+              old.map(c => c.id === sessionId ? { ...c, ...chatUpdate } : c)
+            );
+          }
           queryClient.invalidateQueries({ queryKey: ['chats'] });
         },
       );

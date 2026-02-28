@@ -5,7 +5,7 @@ import { Button } from './ui/Button';
 
 interface ChatMetadataModalProps {
   chat: Chat;
-  onSave: (chatId: string, attrs: { name?: string; emoji?: string; template_id?: string }) => void;
+  onSave: (chatId: string, attrs: { name?: string; emoji?: string; template_id?: string; metadata?: Record<string, unknown> }) => void;
   onClose: () => void;
 }
 
@@ -39,7 +39,7 @@ const ChatMetadataModal: React.FC<ChatMetadataModalProps> = ({ chat, onSave, onC
   // Sync JSON text when switching to JSON view
   useEffect(() => {
     if (viewMode === 'json') {
-      setJsonText(JSON.stringify({ name, emoji, template_id: templateId }, null, 2));
+      setJsonText(JSON.stringify({ name, emoji, template_id: templateId, metadata: chat.metadata || {} }, null, 2));
       setJsonError('');
     }
   }, [viewMode]);
@@ -52,6 +52,7 @@ const ChatMetadataModal: React.FC<ChatMetadataModalProps> = ({ chat, onSave, onC
           name: parsed.name,
           emoji: parsed.emoji,
           template_id: parsed.template_id,
+          metadata: parsed.metadata,
         });
       } catch {
         setJsonError('Invalid JSON. Please check your syntax.');
@@ -121,6 +122,12 @@ const ChatMetadataModal: React.FC<ChatMetadataModalProps> = ({ chat, onSave, onC
                   ))}
                 </select>
               </div>
+              {chat.metadata?.theme && (
+                <div>
+                  <label className="block text-xs text-tn-comment mb-1.5 uppercase tracking-wider">Theme</label>
+                  <p className="text-tn-comment text-sm italic">{String(chat.metadata.theme)}</p>
+                </div>
+              )}
             </>
           ) : (
             <>

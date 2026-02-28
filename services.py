@@ -1,11 +1,13 @@
 import json
 import logging
+import re
 import uuid
 from typing import Any, Dict, List, Optional
 
 import requests
 from flask import current_app
 from requests.exceptions import Timeout
+from sqlalchemy.orm.attributes import flag_modified
 
 from models import Chat, Message, Template, db
 
@@ -39,7 +41,7 @@ class ChatService:
         return db.session.get(Chat, chat_id)
 
     @staticmethod
-    def update_chat(chat_id: str, name: Optional[str] = None, emoji: Optional[str] = None, template_id: Optional[str] = None, is_favorite: Optional[bool] = None) -> Optional[Chat]:
+    def update_chat(chat_id: str, name: Optional[str] = None, emoji: Optional[str] = None, template_id: Optional[str] = None, is_favorite: Optional[bool] = None, metadata: Optional[Dict] = None) -> Optional[Chat]:
         chat = db.session.get(Chat, chat_id)
         if not chat:
             return None
@@ -51,6 +53,10 @@ class ChatService:
             chat.template_id = template_id
         if is_favorite is not None:
             chat.is_favorite = is_favorite
+        if metadata is not None:
+            existing = chat.chat_metadata or {}
+            existing.update(metadata)
+            chat.chat_metadata = existing
         db.session.commit()
         return chat
 
@@ -240,4 +246,61 @@ class LLMService:
                 yield f"An error occurred: {str(e)} ---- is the server online?"
 
         return _stream()
+
+    @staticmethod
+    def review_chat_metadata(chat: Chat) -> None:
+        """Silently review and update chat metadata using LLM. Fire-and-forget; errors are logged and ignored."""
+        try:
+            # Find last user and assistant messages
+            messages = list(chat.messages)
+            last_user = next((m.content for m in reversed(messages) if m.role == 'user'), '')
+            last_assistant = next((m.content for m in reversed(messages) if m.role == 'assistant'), '')
+
+            if not last_user and not last_assistant:
+                return
+
+            query = f"""Current metadata:
+{json.dumps(chat.chat_metadata or {}, indent=2)}
+
+Latest exchange:
+User: {last_user}
+Assistant: {last_assistant}
+
+Instructions:
+- Return ONLY a JSON object with fields to update. No explanation, no markdown.
+- "name": short title (≤6 words). Update if still a default like "Chat N" or clearly wrong.
+- "emoji": single emoji. Update if empty or if a better one is obvious.
+- "theme": one sentence summary of what this chat is about. ALWAYS update this.
+- Add any other fields useful for tracking this conversation's context.
+- Example: {{"name": "Python async debugging", "emoji": "🐍", "theme": "Debugging async/await with SQLAlchemy."}}"""
+
+            prefix = "<|im_start|>system You are a concise chat metadata assistant. <|im_end|> <|im_start|>user "
+            postfix = " <|im_end|><|im_start|>assistant "
+
+            response = LLMService.feed_the_llama(query, prefix, postfix)
+            response = response.strip()
+
+            # Extract JSON object from the response, tolerating surrounding text/fences
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if not json_match:
+                logger.warning("No JSON object found in metadata review response for chat %s", chat.id)
+                return
+
+            updates = json.loads(json_match.group())
+            if not isinstance(updates, dict):
+                return
+
+            existing = dict(chat.chat_metadata or {})
+            existing.update(updates)
+            chat.chat_metadata = existing
+            flag_modified(chat, 'chat_metadata')
+
+            if 'name' in updates:
+                chat.name = updates['name']
+            if 'emoji' in updates:
+                chat.emoji = updates['emoji']
+
+            db.session.commit()
+        except Exception as e:
+            logger.warning("Failed to review chat metadata for chat %s: %s", chat.id, e)
 

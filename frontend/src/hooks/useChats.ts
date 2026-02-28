@@ -35,7 +35,7 @@ export function useDeleteChat() {
 export function useUpdateChat() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ chatId, attrs }: { chatId: string; attrs: Partial<{ name: string; emoji: string; template_id: string }> }) =>
+    mutationFn: ({ chatId, attrs }: { chatId: string; attrs: Partial<{ name: string; emoji: string; template_id: string; is_favorite: boolean; metadata: Record<string, unknown> }> }) =>
       api.updateChat(chatId, attrs),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chats'] });

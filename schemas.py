@@ -13,6 +13,7 @@ class UpdateChatRequest(BaseModel):
     emoji: Optional[str] = Field(default=None, max_length=10)
     template_id: Optional[str] = None
     is_favorite: Optional[bool] = None
+    metadata: Optional[dict] = None
 
 
 class CreateTemplateRequest(BaseModel):

@@ -11,6 +11,7 @@ export interface Chat {
   emoji?: string;
   template_id?: string;
   is_favorite?: boolean;
+  metadata?: Record<string, unknown>;
   messages: Message[];
 }
 
@@ -55,6 +56,7 @@ export interface ChatAttributes {
   is_favorite: boolean;
   message_count: number;
   created_at: number | null;
+  metadata?: Record<string, unknown>;
 }
 
 export interface MessageAttributes {
