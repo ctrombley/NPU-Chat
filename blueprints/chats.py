@@ -54,16 +54,17 @@ def create_chat():
     if error:
         return error
 
-    chat = ChatService.create_chat(data.name if data.name else None, template_id=data.template_id)
+    chat = ChatService.create_chat(data.name if data.name else None, sign_id=data.sign_id)
     return jsonapi_response(
         serialize_resource('chats', chat.id, {
             'name': chat.name,
             'emoji': chat.emoji,
-            'template_id': chat.template_id,
+            'sign_id': chat.sign_id,
             'is_favorite': chat.is_favorite,
             'message_count': 0,
             'created_at': int(chat.created_at.timestamp() * 1000) if chat.created_at else None,
             'metadata': chat.chat_metadata or {},
+            'goal': chat.goal or '',
         }),
         201,
     )
@@ -178,9 +179,10 @@ def update_chat(chat_id):
         chat_id,
         data.name,
         data.emoji,
-        data.template_id,
+        data.sign_id,
         data.is_favorite,
         data.metadata,
+        data.goal,
     )
     if not chat:
         return jsonapi_error_response(404, 'Not Found', 'Chat not found')
@@ -188,9 +190,10 @@ def update_chat(chat_id):
     return jsonapi_response(serialize_resource('chats', chat.id, {
         'name': chat.name,
         'emoji': chat.emoji,
-        'template_id': chat.template_id,
+        'sign_id': chat.sign_id,
         'is_favorite': chat.is_favorite,
         'metadata': chat.chat_metadata or {},
+        'goal': chat.goal or '',
     }))
 
 

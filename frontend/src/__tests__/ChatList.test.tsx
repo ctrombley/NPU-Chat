@@ -13,7 +13,7 @@ const mockProps = {
   onDeleteChat: jest.fn(),
   onToggleFavorite: jest.fn(),
   onEditChat: jest.fn(),
-  onShowTemplates: jest.fn(),
+  onShowSigns: jest.fn(),
   theme: 'theme-dark' as const,
   onThemeChange: jest.fn(),
 };
@@ -47,13 +47,13 @@ describe('ChatList', () => {
     expect(mockProps.onNewChat).toHaveBeenCalledTimes(1);
   });
 
-  it('calls onShowTemplates when Manage Templates button is clicked', () => {
+  it('calls onShowSigns when Signs button is clicked', () => {
     render(<ChatList {...mockProps} />);
 
-    const templatesButton = screen.getByRole('button', { name: 'Manage templates' });
-    fireEvent.click(templatesButton);
+    const signsButton = screen.getByRole('button', { name: 'Manage signs' });
+    fireEvent.click(signsButton);
 
-    expect(mockProps.onShowTemplates).toHaveBeenCalledTimes(1);
+    expect(mockProps.onShowSigns).toHaveBeenCalledTimes(1);
   });
 
   it('calls onSwitchChat when a chat item is clicked', () => {
@@ -110,4 +110,3 @@ describe('ChatList', () => {
     expect(screen.getByRole('button', { name: 'Create new chat' })).toBeInTheDocument();
   });
 });
-

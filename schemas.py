@@ -5,27 +5,36 @@ from pydantic import BaseModel, Field
 
 class CreateChatRequest(BaseModel):
     name: Optional[str] = Field(default=None, max_length=255)
-    template_id: Optional[str] = None
+    sign_id: Optional[str] = None
 
 
 class UpdateChatRequest(BaseModel):
     name: Optional[str] = Field(default=None, max_length=255)
     emoji: Optional[str] = Field(default=None, max_length=10)
-    template_id: Optional[str] = None
+    sign_id: Optional[str] = None
     is_favorite: Optional[bool] = None
     metadata: Optional[dict] = None
+    goal: Optional[str] = None
 
 
-class CreateTemplateRequest(BaseModel):
+class CreateSignRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     prefix: str
     postfix: str
+    values: Optional[str] = None
+    interests: Optional[str] = None
+    default_goal: Optional[str] = None
+    aspects: Optional[str] = None
 
 
-class UpdateTemplateRequest(BaseModel):
+class UpdateSignRequest(BaseModel):
     name: Optional[str] = Field(default=None, max_length=255)
     prefix: Optional[str] = None
     postfix: Optional[str] = None
+    values: Optional[str] = None
+    interests: Optional[str] = None
+    default_goal: Optional[str] = None
+    aspects: Optional[str] = None
 
 
 class SearchRequest(BaseModel):

@@ -8,13 +8,13 @@ from flask_migrate import Migrate, upgrade
 from blueprints.chats import chats_bp
 from blueprints.health import health_bp
 from blueprints.search import search_bp
-from blueprints.templates import templates_bp
+from blueprints.signs import signs_bp
 from config import Config
 from extensions import limiter
 from jsonapi import jsonapi_error_response
 from logging_config import setup_logging
 from models import db
-from services import TemplateService
+from services import SignService
 
 migrate = Migrate()
 
@@ -42,7 +42,7 @@ def create_app(run_migrations=True):
         # Ensure all tables exist (covers fresh DB, failed migrations,
         # and corrupt alembic_version that skips migrations)
         db.create_all()
-        TemplateService.ensure_default_template()
+        SignService.ensure_default_sign()
 
     app.config['SWAGGER'] = {
         'title': 'NPU-Chat API',
@@ -55,7 +55,7 @@ def create_app(run_migrations=True):
 
     app.register_blueprint(health_bp, url_prefix='/api')
     app.register_blueprint(chats_bp, url_prefix='/api/v1')
-    app.register_blueprint(templates_bp, url_prefix='/api/v1')
+    app.register_blueprint(signs_bp, url_prefix='/api/v1')
     app.register_blueprint(search_bp, url_prefix='/api/v1')
 
     @app.route('/api/<path:path>', methods=['GET', 'POST', 'PATCH', 'PUT', 'DELETE'])

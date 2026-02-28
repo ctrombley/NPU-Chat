@@ -7,8 +7,8 @@ import {
   Message,
   MessageAttributes,
   SearchResultAttributes,
-  Template,
-  TemplateAttributes,
+  Sign,
+  SignAttributes,
 } from './types';
 
 const JSONAPI_CONTENT_TYPE = 'application/vnd.api+json';
@@ -47,17 +47,18 @@ export async function listChats(): Promise<Chat[]> {
     id: c.id,
     name: c.name,
     emoji: c.emoji || '',
-    template_id: c.template_id || 'default',
+    sign_id: c.sign_id || 'default',
     is_favorite: c.is_favorite || false,
     metadata: c.metadata || {},
+    goal: c.goal || '',
     messages: [],
   }));
 }
 
-export async function createChat(name?: string, templateId?: string): Promise<Chat> {
+export async function createChat(name?: string, signId?: string): Promise<Chat> {
   const attrs: Record<string, string> = {};
   if (name) attrs.name = name;
-  if (templateId) attrs.template_id = templateId;
+  if (signId) attrs.sign_id = signId;
   const response = await apiFetch('/api/v1/chats', {
     method: 'POST',
     body: JSON.stringify(wrapResource('chats', attrs)),
@@ -69,16 +70,17 @@ export async function createChat(name?: string, templateId?: string): Promise<Ch
     id: resource.id,
     name: resource.attributes.name,
     emoji: resource.attributes.emoji || '',
-    template_id: resource.attributes.template_id || 'default',
+    sign_id: resource.attributes.sign_id || 'default',
     is_favorite: resource.attributes.is_favorite || false,
     metadata: resource.attributes.metadata || {},
+    goal: resource.attributes.goal || '',
     messages: [],
   };
 }
 
 export async function updateChat(
   chatId: string,
-  attrs: Partial<{ name: string; emoji: string; is_favorite: boolean; template_id: string; metadata: Record<string, unknown> }>
+  attrs: Partial<{ name: string; emoji: string; is_favorite: boolean; sign_id: string; metadata: Record<string, unknown>; goal: string }>
 ): Promise<void> {
   const response = await apiFetch(`/api/v1/chats/${chatId}`, {
     method: 'PATCH',
@@ -114,61 +116,78 @@ export async function reviewChatMetadata(chatId: string, userMessage?: string): 
     name: resource.attributes.name,
     emoji: resource.attributes.emoji || '',
     metadata: resource.attributes.metadata || {},
+    goal: resource.attributes.goal || '',
   };
 }
 
-// --- Templates ---
+// --- Signs ---
 
-export async function listTemplates(): Promise<Template[]> {
-  const response = await apiFetch('/api/v1/templates');
-  if (!response.ok) throw new Error('Failed to fetch templates');
-  const doc: JsonApiDocument<TemplateAttributes> = await response.json();
-  return unwrapCollection(doc).map(t => ({
-    id: t.id,
-    name: t.name,
-    prefix: t.prefix,
-    postfix: t.postfix,
+export async function listSigns(): Promise<Sign[]> {
+  const response = await apiFetch('/api/v1/signs');
+  if (!response.ok) throw new Error('Failed to fetch signs');
+  const doc: JsonApiDocument<SignAttributes> = await response.json();
+  return unwrapCollection(doc).map(s => ({
+    id: s.id,
+    name: s.name,
+    prefix: s.prefix,
+    postfix: s.postfix,
+    values: s.values,
+    interests: s.interests,
+    default_goal: s.default_goal || '',
+    aspects: s.aspects,
   }));
 }
 
-export async function createTemplate(name: string, prefix: string, postfix: string): Promise<void> {
-  const response = await apiFetch('/api/v1/templates', {
-    method: 'POST',
-    body: JSON.stringify(wrapResource('templates', { name, prefix, postfix })),
-  });
-  if (!response.ok) throw new Error('Failed to create template');
-}
-
-export async function updateTemplate(
-  templateId: string,
-  attrs: Partial<{ name: string; prefix: string; postfix: string }>
+export async function createSign(
+  name: string, prefix: string, postfix: string,
+  opts?: { values?: string; interests?: string; default_goal?: string; aspects?: string }
 ): Promise<void> {
-  const response = await apiFetch(`/api/v1/templates/${templateId}`, {
-    method: 'PATCH',
-    body: JSON.stringify(wrapResource('templates', attrs, templateId)),
+  const attrs: Record<string, string> = { name, prefix, postfix };
+  if (opts?.values) attrs.values = opts.values;
+  if (opts?.interests) attrs.interests = opts.interests;
+  if (opts?.default_goal) attrs.default_goal = opts.default_goal;
+  if (opts?.aspects) attrs.aspects = opts.aspects;
+  const response = await apiFetch('/api/v1/signs', {
+    method: 'POST',
+    body: JSON.stringify(wrapResource('signs', attrs)),
   });
-  if (!response.ok) throw new Error('Failed to update template');
+  if (!response.ok) throw new Error('Failed to create sign');
 }
 
-export async function cloneTemplate(templateId: string): Promise<Template> {
-  const response = await apiFetch(`/api/v1/templates/${templateId}/clone`, {
+export async function updateSign(
+  signId: string,
+  attrs: Partial<{ name: string; prefix: string; postfix: string; values: string; interests: string; default_goal: string; aspects: string }>
+): Promise<void> {
+  const response = await apiFetch(`/api/v1/signs/${signId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(wrapResource('signs', attrs, signId)),
+  });
+  if (!response.ok) throw new Error('Failed to update sign');
+}
+
+export async function cloneSign(signId: string): Promise<Sign> {
+  const response = await apiFetch(`/api/v1/signs/${signId}/clone`, {
     method: 'POST',
     body: JSON.stringify({}),
   });
-  if (!response.ok) throw new Error('Failed to clone template');
-  const doc: JsonApiDocument<TemplateAttributes> = await response.json();
+  if (!response.ok) throw new Error('Failed to clone sign');
+  const doc: JsonApiDocument<SignAttributes> = await response.json();
   const resource = Array.isArray(doc.data) ? doc.data[0] : doc.data;
   return {
     id: resource.id,
     name: resource.attributes.name,
     prefix: resource.attributes.prefix,
     postfix: resource.attributes.postfix,
+    values: resource.attributes.values,
+    interests: resource.attributes.interests,
+    default_goal: resource.attributes.default_goal || '',
+    aspects: resource.attributes.aspects,
   };
 }
 
-export async function deleteTemplate(templateId: string): Promise<void> {
-  const response = await apiFetch(`/api/v1/templates/${templateId}`, { method: 'DELETE' });
-  if (!response.ok) throw new Error('Failed to delete template');
+export async function deleteSign(signId: string): Promise<void> {
+  const response = await apiFetch(`/api/v1/signs/${signId}`, { method: 'DELETE' });
+  if (!response.ok) throw new Error('Failed to delete sign');
 }
 
 // --- Search ---
@@ -194,6 +213,7 @@ export interface ChatUpdate {
   name: string;
   emoji: string;
   metadata?: Record<string, unknown>;
+  goal?: string;
 }
 
 export async function sendMessageStream(

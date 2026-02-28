@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '../test-utils';
-import Templates from '../components/Templates';
-import { createMockTemplate } from '../test-utils';
+import Signs from '../components/Signs';
+import { createMockSign } from '../test-utils';
 
 // Mock fetch globally
 global.fetch = jest.fn();
@@ -10,49 +10,49 @@ const jsonapiCollection = (type: string, items: { id: string; [key: string]: unk
   data: items.map(({ id, ...attrs }) => ({ type, id, attributes: attrs })),
 });
 
-const mockTemplates = [
-  createMockTemplate({ id: 'template-1', name: 'Helpful Assistant', prefix: 'You are helpful', postfix: 'Be concise' }),
-  createMockTemplate({ id: 'template-2', name: 'Code Expert', prefix: 'You are a coding expert', postfix: 'Use code blocks' }),
+const mockSigns = [
+  createMockSign({ id: 'sign-1', name: 'Helpful Assistant', prefix: 'You are helpful', postfix: 'Be concise' }),
+  createMockSign({ id: 'sign-2', name: 'Code Expert', prefix: 'You are a coding expert', postfix: 'Use code blocks' }),
 ];
 
 const mockOnClose = jest.fn();
 
 const defaultMockFetch = (url: string, options?: RequestInit) => {
-  if (url === '/api/v1/templates' && (!options || !options.method || options.method === 'GET')) {
+  if (url === '/api/v1/signs' && (!options || !options.method || options.method === 'GET')) {
     return Promise.resolve({
       ok: true,
       json: () => Promise.resolve(
-        jsonapiCollection('templates', mockTemplates)
+        jsonapiCollection('signs', mockSigns)
       ),
     });
   }
   return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
 };
 
-describe('Templates', () => {
+describe('Signs', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (global.fetch as jest.Mock).mockImplementation(defaultMockFetch);
   });
 
-  it('renders templates list', async () => {
-    render(<Templates onClose={mockOnClose} />);
+  it('renders signs list', async () => {
+    render(<Signs onClose={mockOnClose} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Templates')).toBeInTheDocument();
+      expect(screen.getByText('Signs')).toBeInTheDocument();
       expect(screen.getByText('Helpful Assistant')).toBeInTheDocument();
       expect(screen.getByText('Code Expert')).toBeInTheDocument();
     });
   });
 
   it('shows loading state initially', () => {
-    render(<Templates onClose={mockOnClose} />);
+    render(<Signs onClose={mockOnClose} />);
 
     expect(screen.getByText('Loading...')).toBeInTheDocument();
   });
 
   it('calls onClose when close button is clicked', async () => {
-    render(<Templates onClose={mockOnClose} />);
+    render(<Signs onClose={mockOnClose} />);
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
@@ -64,16 +64,16 @@ describe('Templates', () => {
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
 
-  it('handles edit template flow', async () => {
+  it('handles edit sign flow', async () => {
     // Override mock to handle PATCH
     (global.fetch as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
-      if (typeof url === 'string' && url.startsWith('/api/v1/templates/') && options?.method === 'PATCH') {
+      if (typeof url === 'string' && url.startsWith('/api/v1/signs/') && options?.method === 'PATCH') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       }
       return defaultMockFetch(url, options);
     });
 
-    render(<Templates onClose={mockOnClose} />);
+    render(<Signs onClose={mockOnClose} />);
 
     await waitFor(() => {
       expect(screen.getByText('Helpful Assistant')).toBeInTheDocument();
@@ -96,22 +96,22 @@ describe('Templates', () => {
     fireEvent.click(screen.getByText('Save'));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/v1/templates/template-1', expect.objectContaining({
+      expect(global.fetch).toHaveBeenCalledWith('/api/v1/signs/sign-1', expect.objectContaining({
         method: 'PATCH',
       }));
     });
   });
 
-  it('handles delete template with two-click confirmation', async () => {
+  it('handles delete sign with two-click confirmation', async () => {
     // Override mock to handle DELETE
     (global.fetch as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
-      if (typeof url === 'string' && url.startsWith('/api/v1/templates/') && options?.method === 'DELETE') {
+      if (typeof url === 'string' && url.startsWith('/api/v1/signs/') && options?.method === 'DELETE') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       }
       return defaultMockFetch(url, options);
     });
 
-    render(<Templates onClose={mockOnClose} />);
+    render(<Signs onClose={mockOnClose} />);
 
     await waitFor(() => {
       expect(screen.getByText('Helpful Assistant')).toBeInTheDocument();
@@ -127,42 +127,42 @@ describe('Templates', () => {
     });
 
     // DELETE should NOT have been called yet
-    expect(global.fetch).not.toHaveBeenCalledWith('/api/v1/templates/template-1', expect.objectContaining({ method: 'DELETE' }));
+    expect(global.fetch).not.toHaveBeenCalledWith('/api/v1/signs/sign-1', expect.objectContaining({ method: 'DELETE' }));
 
     // Second click actually deletes
     fireEvent.click(screen.getByText('Confirm?'));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/v1/templates/template-1', expect.objectContaining({
+      expect(global.fetch).toHaveBeenCalledWith('/api/v1/signs/sign-1', expect.objectContaining({
         method: 'DELETE',
       }));
     });
   });
 
-  it('handles create new template', async () => {
+  it('handles create new sign', async () => {
     // Override mock to handle POST
     (global.fetch as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
-      if (url === '/api/v1/templates' && options?.method === 'POST') {
+      if (url === '/api/v1/signs' && options?.method === 'POST') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       }
       return defaultMockFetch(url, options);
     });
 
-    render(<Templates onClose={mockOnClose} />);
+    render(<Signs onClose={mockOnClose} />);
 
     await waitFor(() => {
-      expect(screen.getByText('New Template')).toBeInTheDocument();
+      expect(screen.getByText('New Sign')).toBeInTheDocument();
     });
 
-    // Click New Template
-    fireEvent.click(screen.getByText('New Template'));
+    // Click New Sign
+    fireEvent.click(screen.getByText('New Sign'));
 
     // Fill in the form
-    const nameInput = screen.getByPlaceholderText('Template name');
+    const nameInput = screen.getByPlaceholderText('Sign name');
     const prefixInput = screen.getByPlaceholderText('System prompt prefix...');
     const postfixInput = screen.getByPlaceholderText('System prompt postfix...');
 
-    fireEvent.change(nameInput, { target: { value: 'New Template' } });
+    fireEvent.change(nameInput, { target: { value: 'New Sign' } });
     fireEvent.change(prefixInput, { target: { value: 'New prefix' } });
     fireEvent.change(postfixInput, { target: { value: 'New postfix' } });
 
@@ -170,7 +170,7 @@ describe('Templates', () => {
     fireEvent.click(screen.getByText('Create'));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/v1/templates', expect.objectContaining({
+      expect(global.fetch).toHaveBeenCalledWith('/api/v1/signs', expect.objectContaining({
         method: 'POST',
       }));
     });
@@ -182,10 +182,10 @@ describe('Templates', () => {
       Promise.reject(new Error('Network error'))
     );
 
-    render(<Templates onClose={mockOnClose} />);
+    render(<Signs onClose={mockOnClose} />);
 
     await waitFor(() => {
-      expect(consoleSpy).toHaveBeenCalledWith('Error loading templates:', expect.any(Error));
+      expect(consoleSpy).toHaveBeenCalledWith('Error loading signs:', expect.any(Error));
     });
 
     consoleSpy.mockRestore();

@@ -47,9 +47,9 @@ export const createMockMessage = (overrides = {}) => ({
   ...overrides,
 });
 
-export const createMockTemplate = (overrides = {}) => ({
-  id: 'template-1',
-  name: 'Test Template',
+export const createMockSign = (overrides = {}) => ({
+  id: 'sign-1',
+  name: 'Test Sign',
   prefix: 'You are a helpful assistant.',
   postfix: 'Please be concise.',
   ...overrides,

@@ -16,7 +16,7 @@ from schemas import SearchRequest
 from services import (
     ChatService,
     LLMService,
-    TemplateService,
+    SignService,
 )
 
 search_bp = Blueprint('search', __name__)
@@ -123,10 +123,10 @@ def search_stream():
         return Response(single_event(), mimetype='text/event-stream',
                         headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
-    # Get template
-    template = TemplateService.get_template(chat.template_id)
-    if not template:
-        template = TemplateService.get_template('default')
+    # Get sign
+    sign = SignService.get_sign(chat.sign_id)
+    if not sign:
+        sign = SignService.get_sign('default')
 
     chat.add_message('user', question)
 
@@ -141,8 +141,8 @@ def search_stream():
 
     # We need to capture these for the generator closure
     chat_id = chat.id
-    prefix = template.prefix
-    postfix = template.postfix
+    prefix = sign.prefix
+    postfix = sign.postfix
 
     # Capture app and stream eagerly (while still in app context)
     # since the generator will be iterated outside it during streaming.
@@ -245,10 +245,10 @@ def web_request_logic(session_id, question):
         )
         return {'content': help_text, 'session_id': session_id}
 
-    # Get template
-    template = TemplateService.get_template(chat.template_id)
-    if not template:
-        template = TemplateService.get_template('default')
+    # Get sign
+    sign = SignService.get_sign(chat.sign_id)
+    if not sign:
+        sign = SignService.get_sign('default')
 
     chat.add_message('user', question)
 
@@ -261,7 +261,7 @@ def web_request_logic(session_id, question):
             llm_output_history += f"```\n{msg.content}\n```\n"
         query = llm_output_history + question
 
-    raw_answer = LLMService.feed_the_llama(query, template.prefix, template.postfix)
+    raw_answer = LLMService.feed_the_llama(query, sign.prefix, sign.postfix)
 
     chat.add_message('assistant', raw_answer)
 

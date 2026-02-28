@@ -14,7 +14,7 @@ interface ChatListProps {
   onDeleteChat: (chatId: string) => void;
   onToggleFavorite: (chatId: string, isFavorite: boolean) => void;
   onEditChat: (chatId: string) => void;
-  onShowTemplates: () => void;
+  onShowSigns: () => void;
   sidebarWidth?: number;
   theme: Theme;
   onThemeChange: (theme: Theme) => void;
@@ -28,7 +28,7 @@ const ChatList: React.FC<ChatListProps> = ({
   onDeleteChat,
   onToggleFavorite,
   onEditChat,
-  onShowTemplates,
+  onShowSigns,
   sidebarWidth,
   theme,
   onThemeChange,
@@ -62,10 +62,10 @@ const ChatList: React.FC<ChatListProps> = ({
       </Button>
       <Button
         variant="secondary"
-        onClick={onShowTemplates}
-        aria-label="Manage templates"
+        onClick={onShowSigns}
+        aria-label="Manage signs"
       >
-        Manage Templates
+        Signs
       </Button>
     </Sidebar>
   );

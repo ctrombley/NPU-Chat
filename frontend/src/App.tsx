@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import ChatList from './components/ChatList';
 import ChatMessages from './components/ChatMessages';
 import MessageInput from './components/MessageInput';
-import Templates from './components/Templates';
+import Signs from './components/Signs';
 import ChatMetadataModal from './components/ChatMetadataModal';
 import { Message } from './types';
 import { useChats, useCreateChat, useDeleteChat, useToggleFavorite, useUpdateChat } from './hooks/useChats';
@@ -13,7 +13,7 @@ import { useTheme } from './hooks/useTheme';
 
 function App() {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
-  const [showTemplates, setShowTemplates] = useState(false);
+  const [showSigns, setShowSigns] = useState(false);
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const [optimisticMessages, setOptimisticMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -75,13 +75,13 @@ function App() {
     }
   };
 
-  const handleNewChatWithTemplate = async (templateId: string) => {
+  const handleNewChatWithSign = async (signId: string) => {
     try {
-      const chatObj = await createChatMutation.mutateAsync({ templateId });
+      const chatObj = await createChatMutation.mutateAsync({ signId });
       setCurrentChatId(chatObj.id);
       setOptimisticMessages([]);
     } catch (error) {
-      console.error('Failed to create chat with template:', error);
+      console.error('Failed to create chat with sign:', error);
     }
   };
 
@@ -120,7 +120,7 @@ function App() {
     setEditingChatId(chatId);
   };
 
-  const handleSaveChat = async (chatId: string, attrs: { name?: string; emoji?: string; template_id?: string; metadata?: Record<string, unknown> }) => {
+  const handleSaveChat = async (chatId: string, attrs: { name?: string; emoji?: string; sign_id?: string; metadata?: Record<string, unknown>; goal?: string }) => {
     try {
       await updateChatMutation.mutateAsync({ chatId, attrs });
       setEditingChatId(null);
@@ -191,7 +191,7 @@ function App() {
         onDeleteChat={handleDeleteChat}
         onToggleFavorite={handleToggleFavorite}
         onEditChat={handleEditChat}
-        onShowTemplates={() => setShowTemplates(true)}
+        onShowSigns={() => setShowSigns(true)}
         sidebarWidth={sidebarWidth}
         theme={theme}
         onThemeChange={setTheme}
@@ -206,8 +206,8 @@ function App() {
         onMessageSent={handleSendMessage}
         isLoading={isStreaming}
       />
-      {showTemplates && (
-        <Templates onClose={() => setShowTemplates(false)} onNewChatWithTemplate={handleNewChatWithTemplate} />
+      {showSigns && (
+        <Signs onClose={() => setShowSigns(false)} onNewChatWithSign={handleNewChatWithSign} />
       )}
       {editingChatId && (() => {
         const editingChat = chats.find(c => c.id === editingChatId);

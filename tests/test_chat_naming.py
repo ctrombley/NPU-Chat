@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from conftest import JSONAPI_CONTENT_TYPE, get_jsonapi_id, jsonapi_post
 
-from models import Chat, db
+from models import Chat, Sign, db
 
 
 class MockLLMResp:
@@ -44,7 +44,7 @@ def test_review_metadata_endpoint_updates_name_and_emoji(client):
     assert resp.status_code == 201
     chat_id = get_jsonapi_id(resp)
 
-    with patch('requests.post', side_effect=make_llm_mock({'name': 'Python Help', 'emoji': '🐍', 'theme': 'Python debugging'})):
+    with patch('requests.post', side_effect=make_llm_mock({'name': 'Python Help', 'emoji': '\U0001f40d', 'theme': 'Python debugging'})):
         response = client.post(
             f'/api/v1/chats/{chat_id}/review-metadata',
             data=json.dumps({'user_message': 'How do I fix this Python bug?'}),
@@ -54,12 +54,12 @@ def test_review_metadata_endpoint_updates_name_and_emoji(client):
     assert response.status_code == 200
     body = json.loads(response.data)
     assert body['data']['attributes']['name'] == 'Python Help'
-    assert body['data']['attributes']['emoji'] == '🐍'
+    assert body['data']['attributes']['emoji'] == '\U0001f40d'
 
     with client.application.app_context():
         chat = db.session.get(Chat, chat_id)
         assert chat.name == 'Python Help'
-        assert chat.emoji == '🐍'
+        assert chat.emoji == '\U0001f40d'
 
 
 def test_review_metadata_endpoint_uses_user_message_from_body(client):
@@ -73,7 +73,7 @@ def test_review_metadata_endpoint_uses_user_message_from_body(client):
         prefix = (json or {}).get('PROMPT_TEXT_PREFIX', '')
         if 'metadata assistant' in prefix:
             captured_queries.append((json or {}).get('input_str', ''))
-            return MockLLMResp({'content': '{"name": "JS Help", "emoji": "🟨", "theme": "JavaScript questions"}'})
+            return MockLLMResp({'content': '{"name": "JS Help", "emoji": "\U0001f7e8", "theme": "JavaScript questions"}'})
         return MockLLMResp({'content': 'reply'})
 
     with patch('requests.post', side_effect=capture_side_effect):
@@ -157,3 +157,55 @@ def test_search_stream_does_not_call_metadata_review(client):
         'search/stream should not call metadata review; '
         'the frontend fires that separately'
     )
+
+
+def test_review_metadata_clamps_chart_values(client):
+    """Chart values returned by LLM are clamped to the aspect schema min/max."""
+    with client.application.app_context():
+        sign = Sign(
+            id='test-sign',
+            name='Test Sign',
+            prefix='<|im_start|>system test <|im_end|> <|im_start|>user ',
+            postfix=' <|im_end|><|im_start|>assistant ',
+        )
+        sign.aspects = json.dumps({
+            'trust': {'description': 'Trust level', 'initial': 0.5, 'min': 0, 'max': 1},
+            'curiosity': {'description': 'Curiosity', 'initial': 0.3, 'min': 0, 'max': 1},
+        })
+        sign.default_goal = 'Build rapport'
+        db.session.add(sign)
+        db.session.commit()
+
+    resp = jsonapi_post(client, '/api/v1/chats', 'chats', {'sign_id': 'test-sign'})
+    assert resp.status_code == 201
+    chat_id = get_jsonapi_id(resp)
+    body = json.loads(resp.data)
+    assert body['data']['attributes']['goal'] == 'Build rapport'
+    chart = body['data']['attributes']['metadata'].get('chart', {})
+    assert chart['trust'] == 0.5
+    assert chart['curiosity'] == 0.3
+
+    # LLM returns out-of-range values — they should be clamped
+    llm_response = {
+        'name': 'Trust Test',
+        'emoji': '\U0001f91d',
+        'theme': 'Testing trust',
+        'chart': {'trust': 1.5, 'curiosity': -0.2},
+        'goal': 'Establish deep trust',
+    }
+
+    with patch('requests.post', side_effect=make_llm_mock(llm_response)):
+        response = client.post(
+            f'/api/v1/chats/{chat_id}/review-metadata',
+            data=json.dumps({'user_message': 'I trust you completely'}),
+            content_type='application/json',
+        )
+
+    assert response.status_code == 200
+    body = json.loads(response.data)
+    attrs = body['data']['attributes']
+    assert attrs['name'] == 'Trust Test'
+    assert attrs['goal'] == 'Establish deep trust'
+    chart = attrs['metadata']['chart']
+    assert chart['trust'] == 1.0  # clamped from 1.5
+    assert chart['curiosity'] == 0.0  # clamped from -0.2

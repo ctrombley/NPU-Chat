@@ -42,10 +42,10 @@ const defaultMockFetch = (url: string, options?: RequestInit) => {
       json: () => Promise.resolve(jsonapiCollection('messages', [])),
     });
   }
-  if (url === '/api/v1/templates') {
+  if (url === '/api/v1/signs') {
     return Promise.resolve({
       ok: true,
-      json: () => Promise.resolve(jsonapiCollection('templates', [])),
+      json: () => Promise.resolve(jsonapiCollection('signs', [])),
     });
   }
   return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
@@ -288,16 +288,16 @@ describe('App Integration', () => {
     });
   });
 
-  it('handles template management modal', async () => {
+  it('handles sign management modal', async () => {
     render(<App />);
 
     await waitFor(() => {
-      const templatesButton = screen.getByRole('button', { name: 'Manage templates' });
-      fireEvent.click(templatesButton);
+      const signsButton = screen.getByRole('button', { name: 'Manage signs' });
+      fireEvent.click(signsButton);
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Templates')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Signs' })).toBeInTheDocument();
     });
   });
 

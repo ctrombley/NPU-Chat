@@ -10,17 +10,29 @@ export interface Chat {
   id: string;
   name?: string;
   emoji?: string;
-  template_id?: string;
+  sign_id?: string;
   is_favorite?: boolean;
   metadata?: Record<string, unknown>;
+  goal?: string;
   messages: Message[];
 }
 
-export interface Template {
+export interface AspectSchema {
+  description: string;
+  initial: number;
+  min: number;
+  max: number;
+}
+
+export interface Sign {
   id: string;
   name: string;
   prefix: string;
   postfix: string;
+  values?: unknown;
+  interests?: unknown;
+  default_goal?: string;
+  aspects?: Record<string, AspectSchema> | null;
 }
 
 export interface ChatResponse {
@@ -53,11 +65,12 @@ export interface JsonApiErrorDocument {
 export interface ChatAttributes {
   name: string;
   emoji: string;
-  template_id: string;
+  sign_id: string;
   is_favorite: boolean;
   message_count: number;
   created_at: number | null;
   metadata?: Record<string, unknown>;
+  goal?: string;
 }
 
 export interface MessageAttributes {
@@ -65,10 +78,14 @@ export interface MessageAttributes {
   content: string;
 }
 
-export interface TemplateAttributes {
+export interface SignAttributes {
   name: string;
   prefix: string;
   postfix: string;
+  values?: unknown;
+  interests?: unknown;
+  default_goal?: string;
+  aspects?: Record<string, AspectSchema> | null;
 }
 
 export interface SearchResultAttributes {

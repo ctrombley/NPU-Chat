@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Chat, Template } from '../types';
+import { Chat, Sign } from '../types';
 import * as api from '../api';
 import { Button } from './ui/Button';
 
 interface ChatMetadataModalProps {
   chat: Chat;
-  onSave: (chatId: string, attrs: { name?: string; emoji?: string; template_id?: string; metadata?: Record<string, unknown> }) => void;
+  onSave: (chatId: string, attrs: { name?: string; emoji?: string; sign_id?: string; metadata?: Record<string, unknown>; goal?: string }) => void;
   onClose: () => void;
 }
 
@@ -19,13 +19,14 @@ const ChatMetadataModal: React.FC<ChatMetadataModalProps> = ({ chat, onSave, onC
   const [viewMode, setViewMode] = useState<ViewMode>('form');
   const [name, setName] = useState(chat.name || '');
   const [emoji, setEmoji] = useState(chat.emoji || '');
-  const [templateId, setTemplateId] = useState(chat.template_id || 'default');
-  const [templates, setTemplates] = useState<Template[]>([]);
+  const [signId, setSignId] = useState(chat.sign_id || 'default');
+  const [goal, setGoal] = useState(chat.goal || '');
+  const [signs, setSigns] = useState<Sign[]>([]);
   const [jsonText, setJsonText] = useState('');
   const [jsonError, setJsonError] = useState('');
 
   useEffect(() => {
-    api.listTemplates().then(setTemplates).catch(console.error);
+    api.listSigns().then(setSigns).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -39,7 +40,7 @@ const ChatMetadataModal: React.FC<ChatMetadataModalProps> = ({ chat, onSave, onC
   // Sync JSON text when switching to JSON view
   useEffect(() => {
     if (viewMode === 'json') {
-      setJsonText(JSON.stringify({ name, emoji, template_id: templateId, metadata: chat.metadata || {} }, null, 2));
+      setJsonText(JSON.stringify({ name, emoji, sign_id: signId, goal, metadata: chat.metadata || {} }, null, 2));
       setJsonError('');
     }
   }, [viewMode]);
@@ -51,7 +52,8 @@ const ChatMetadataModal: React.FC<ChatMetadataModalProps> = ({ chat, onSave, onC
         onSave(chat.id, {
           name: parsed.name,
           emoji: parsed.emoji,
-          template_id: parsed.template_id,
+          sign_id: parsed.sign_id,
+          goal: parsed.goal,
           metadata: parsed.metadata,
         });
       } catch {
@@ -59,9 +61,12 @@ const ChatMetadataModal: React.FC<ChatMetadataModalProps> = ({ chat, onSave, onC
         return;
       }
     } else {
-      onSave(chat.id, { name, emoji, template_id: templateId });
+      onSave(chat.id, { name, emoji, sign_id: signId, goal });
     }
   };
+
+  const chart = (chat.metadata?.chart || {}) as Record<string, number>;
+  const chartEntries = Object.entries(chart);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -111,17 +116,46 @@ const ChatMetadataModal: React.FC<ChatMetadataModalProps> = ({ chat, onSave, onC
                 />
               </div>
               <div>
-                <label className="block text-xs text-theme-fg-muted mb-1.5 uppercase tracking-wider">Template</label>
+                <label className="block text-xs text-theme-fg-muted mb-1.5 uppercase tracking-wider">Sign</label>
                 <select
-                  value={templateId}
-                  onChange={(e) => setTemplateId(e.target.value)}
+                  value={signId}
+                  onChange={(e) => setSignId(e.target.value)}
                   className={selectClass}
                 >
-                  {templates.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
+                  {signs.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
               </div>
+              <div>
+                <label className="block text-xs text-theme-fg-muted mb-1.5 uppercase tracking-wider">Goal</label>
+                <input
+                  type="text"
+                  value={goal}
+                  onChange={(e) => setGoal(e.target.value)}
+                  placeholder="Chat goal"
+                  className={inputClass}
+                />
+              </div>
+              {chartEntries.length > 0 && (
+                <div>
+                  <label className="block text-xs text-theme-fg-muted mb-1.5 uppercase tracking-wider">Chart</label>
+                  <div className="space-y-2">
+                    {chartEntries.map(([aspect, value]) => (
+                      <div key={aspect} className="flex items-center gap-3">
+                        <span className="text-xs text-theme-fg-muted w-24 truncate capitalize">{aspect}</span>
+                        <div className="flex-1 h-2 bg-theme-highlight rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-theme-active rounded-full transition-all"
+                            style={{ width: `${Math.round(Number(value) * 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-theme-fg-muted w-10 text-right">{Math.round(Number(value) * 100)}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {chat.metadata?.theme && (
                 <div>
                   <label className="block text-xs text-theme-fg-muted mb-1.5 uppercase tracking-wider">Theme</label>

@@ -1,3 +1,4 @@
+import json
 import os
 
 
@@ -9,10 +10,25 @@ class Config:
         self.BINDING_ADDRESS = os.environ.get('BINDING_ADDRESS', '0.0.0.0')
         self.BINDING_PORT = int(os.environ.get('BINDING_PORT', '1314'))
 
-        # NPU Server
+        # NPU Server (legacy single-model config)
         self.NPU_ADDRESS = os.environ.get('NPU_ADDRESS', '192.168.0.196')
         self.NPU_PORT = os.environ.get('NPU_PORT', '31337')
         self.CONNECTION_TIMEOUT = int(os.environ.get('CONNECTION_TIMEOUT', '45'))
+
+        # Model registry — JSON mapping role → {address, port, timeout, serialize}
+        # If not set, all roles use NPU_ADDRESS:NPU_PORT
+        raw_registry = os.environ.get('MODEL_REGISTRY', '')
+        if raw_registry:
+            self.MODEL_REGISTRY = json.loads(raw_registry)
+        else:
+            self.MODEL_REGISTRY = {
+                'chat': {
+                    'address': self.NPU_ADDRESS,
+                    'port': int(self.NPU_PORT),
+                    'timeout': self.CONNECTION_TIMEOUT,
+                    'serialize': True,
+                }
+            }
 
         # Context
         self.USE_CONTEXT = os.environ.get('USE_CONTEXT', 'True').lower() in ('true', '1', 'yes')
