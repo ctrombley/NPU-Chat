@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import threading
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -147,6 +148,10 @@ class TemplateService:
         return True
 
 class LLMService:
+    # Serializes all calls to the NPU server. The RKLLM library is not thread-safe
+    # and segfaults if two inference requests overlap.
+    _npu_lock = threading.Lock()
+
     @staticmethod
     def _build_request(query: str, prefix: str, postfix: str) -> Dict[str, Any]:
         return {
@@ -161,22 +166,23 @@ class LLMService:
         json_data = LLMService._build_request(query, prefix, postfix)
         headers = {'Content-Type': 'application/json'}
 
-        try:
-            resp = requests.post(
-                f"http://{config['NPU_ADDRESS']}:{config['NPU_PORT']}",
-                headers=headers,
-                json=json_data,
-                timeout=config['CONNECTION_TIMEOUT']
-            )
-            resp.raise_for_status()
-            resp_json: Dict[str, Any] = resp.json()
-            answer = resp_json.get('content', '')
-            return answer
-        except Timeout:
-            return "Request timed out. Please try again later."
-        except requests.exceptions.RequestException as e:
-            error_msg = f"An error occurred: {str(e)} ---- is the server online?"
-            return error_msg
+        with LLMService._npu_lock:
+            try:
+                resp = requests.post(
+                    f"http://{config['NPU_ADDRESS']}:{config['NPU_PORT']}",
+                    headers=headers,
+                    json=json_data,
+                    timeout=config['CONNECTION_TIMEOUT']
+                )
+                resp.raise_for_status()
+                resp_json: Dict[str, Any] = resp.json()
+                answer = resp_json.get('content', '')
+                return answer
+            except Timeout:
+                return "Request timed out. Please try again later."
+            except requests.exceptions.RequestException as e:
+                error_msg = f"An error occurred: {str(e)} ---- is the server online?"
+                return error_msg
 
     @staticmethod
     def feed_the_llama_stream(query: str, prefix: str, postfix: str):
@@ -190,60 +196,64 @@ class LLMService:
         json_data = LLMService._build_request(query, prefix, postfix)
 
         def _stream():
-            headers = {'Content-Type': 'application/json'}
+            # Hold the lock for the entire stream so the shadow metadata request
+            # (or any other concurrent call) queues behind this one rather than
+            # sending a second request to the NPU server simultaneously.
+            with LLMService._npu_lock:
+                headers = {'Content-Type': 'application/json'}
 
-            try:
-                resp = requests.post(
-                    f"http://{npu_address}:{npu_port}",
-                    headers=headers,
-                    json=json_data,
-                    timeout=connection_timeout,
-                    stream=True,
-                )
-                resp.raise_for_status()
+                try:
+                    resp = requests.post(
+                        f"http://{npu_address}:{npu_port}",
+                        headers=headers,
+                        json=json_data,
+                        timeout=connection_timeout,
+                        stream=True,
+                    )
+                    resp.raise_for_status()
 
-                # Try to consume as a chunked stream first
-                buffer = b""
-                got_chunks = False
-                for chunk in resp.iter_content(chunk_size=64):
-                    if chunk:
-                        got_chunks = True
-                        buffer += chunk
-                        # Try to decode and yield partial text
+                    # Try to consume as a chunked stream first
+                    buffer = b""
+                    got_chunks = False
+                    for chunk in resp.iter_content(chunk_size=64):
+                        if chunk:
+                            got_chunks = True
+                            buffer += chunk
+                            # Try to decode and yield partial text
+                            try:
+                                partial = buffer.decode('utf-8')
+                                yield partial
+                                buffer = b""
+                            except UnicodeDecodeError:
+                                # Incomplete multi-byte char, wait for more data
+                                continue
+
+                    # If we got chunked data, flush any remaining buffer
+                    if got_chunks and buffer:
                         try:
-                            partial = buffer.decode('utf-8')
-                            yield partial
-                            buffer = b""
-                        except UnicodeDecodeError:
-                            # Incomplete multi-byte char, wait for more data
-                            continue
+                            yield buffer.decode('utf-8', errors='replace')
+                        except Exception:
+                            pass
+                        return
 
-                # If we got chunked data, flush any remaining buffer
-                if got_chunks and buffer:
-                    try:
-                        yield buffer.decode('utf-8', errors='replace')
-                    except Exception:
-                        pass
-                    return
+                    # If iter_content gave us the full response at once (no chunking),
+                    # parse JSON and yield the content in small pieces
+                    if not got_chunks:
+                        full_text = resp.text
+                        try:
+                            resp_json = resp.json()
+                            full_text = resp_json.get('content', full_text)
+                        except (ValueError, KeyError):
+                            pass
+                        # Yield word-by-word for a typing effect
+                        words = full_text.split(' ')
+                        for i, word in enumerate(words):
+                            yield word + (' ' if i < len(words) - 1 else '')
 
-                # If iter_content gave us the full response at once (no chunking),
-                # parse JSON and yield the content in small pieces
-                if not got_chunks:
-                    full_text = resp.text
-                    try:
-                        resp_json = resp.json()
-                        full_text = resp_json.get('content', full_text)
-                    except (ValueError, KeyError):
-                        pass
-                    # Yield word-by-word for a typing effect
-                    words = full_text.split(' ')
-                    for i, word in enumerate(words):
-                        yield word + (' ' if i < len(words) - 1 else '')
-
-            except Timeout:
-                yield "Request timed out. Please try again later."
-            except requests.exceptions.RequestException as e:
-                yield f"An error occurred: {str(e)} ---- is the server online?"
+                except Timeout:
+                    yield "Request timed out. Please try again later."
+                except requests.exceptions.RequestException as e:
+                    yield f"An error occurred: {str(e)} ---- is the server online?"
 
         return _stream()
 
