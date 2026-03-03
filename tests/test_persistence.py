@@ -17,7 +17,7 @@ def test_message_persistence(client, monkeypatch):
     Metadata review (naming/emoji) is a separate frontend-initiated shadow request
     to POST /api/v1/chats/{id}/review-metadata and is not triggered by /search.
     """
-    def fake_feed(query, prefix, postfix):
+    def fake_feed(messages, role='chat'):
         return "This is the assistant reply."
 
     monkeypatch.setattr('services.LLMService.feed_the_llama', fake_feed)

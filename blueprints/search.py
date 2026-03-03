@@ -130,24 +130,25 @@ def search_stream():
 
     chat.add_message('user', question)
 
-    messages = ChatService.get_chat_messages(session_id) or []
-    query = question
-    if config['USE_CONTEXT'] and len(messages) > 1:
-        history_msgs = messages[-context_depth * 2:-1] if context_depth else messages[:-1]
-        llm_output_history = ""
+    db_messages = ChatService.get_chat_messages(session_id) or []
+    system_prompt = LLMService._clean_prefix(sign.prefix)
+    llm_messages: list = [{"role": "system", "content": system_prompt}]
+    if config['USE_CONTEXT'] and len(db_messages) > 1:
+        history_msgs = db_messages[:-1]
+        if context_depth:
+            history_msgs = history_msgs[-(context_depth * 2):]
         for msg in history_msgs:
-            llm_output_history += f"```\n{msg.content}\n```\n"
-        query = llm_output_history + question
+            if msg.role in ('user', 'assistant'):
+                llm_messages.append({"role": msg.role, "content": msg.content})
+    llm_messages.append({"role": "user", "content": question})
 
     # We need to capture these for the generator closure
     chat_id = chat.id
-    prefix = sign.prefix
-    postfix = sign.postfix
 
     # Capture app and stream eagerly (while still in app context)
     # since the generator will be iterated outside it during streaming.
     app = current_app._get_current_object()
-    stream = LLMService.feed_the_llama_stream(query, prefix, postfix)
+    stream = LLMService.feed_the_llama_stream(llm_messages)
 
     def generate():
         full_response = []
@@ -252,16 +253,19 @@ def web_request_logic(session_id, question):
 
     chat.add_message('user', question)
 
-    messages = ChatService.get_chat_messages(session_id) or []
-    query = question
-    if config['USE_CONTEXT'] and len(messages) > 1:
-        history_msgs = messages[-context_depth * 2:-1] if context_depth else messages[:-1]
-        llm_output_history = ""
+    db_messages = ChatService.get_chat_messages(session_id) or []
+    system_prompt = LLMService._clean_prefix(sign.prefix)
+    llm_messages: list = [{"role": "system", "content": system_prompt}]
+    if config['USE_CONTEXT'] and len(db_messages) > 1:
+        history_msgs = db_messages[:-1]
+        if context_depth:
+            history_msgs = history_msgs[-(context_depth * 2):]
         for msg in history_msgs:
-            llm_output_history += f"```\n{msg.content}\n```\n"
-        query = llm_output_history + question
+            if msg.role in ('user', 'assistant'):
+                llm_messages.append({"role": msg.role, "content": msg.content})
+    llm_messages.append({"role": "user", "content": question})
 
-    raw_answer = LLMService.feed_the_llama(query, sign.prefix, sign.postfix)
+    raw_answer = LLMService.feed_the_llama(llm_messages)
 
     chat.add_message('assistant', raw_answer)
 

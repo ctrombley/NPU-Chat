@@ -20,8 +20,16 @@ class MockLLMResp:
     def json(self):
         return self._json
 
-    def iter_content(self, chunk_size=None):
-        return iter([])
+    def iter_lines(self):
+        content = self._json.get('choices', [{}])[0].get('message', {}).get('content', '')
+        yield f"data: {json.dumps({'choices': [{'delta': {'content': content}}]})}".encode('utf-8')
+        yield b"data: [DONE]"
+
+
+def _is_metadata_call(req_json):
+    """Identify a metadata review call by its system prompt content."""
+    messages = (req_json or {}).get('messages', [])
+    return any('metadata assistant' in m.get('content', '') for m in messages if m.get('role') == 'system')
 
 
 def make_llm_mock(metadata_response, normal_response='LLM normal reply'):
@@ -30,10 +38,9 @@ def make_llm_mock(metadata_response, normal_response='LLM normal reply'):
     metadata_content = json.dumps(metadata_response)
 
     def side_effect(url, headers=None, json=None, timeout=None, stream=False):
-        prefix = (json or {}).get('PROMPT_TEXT_PREFIX', '')
-        if 'metadata assistant' in prefix:
-            return MockLLMResp({'content': metadata_content})
-        return MockLLMResp({'content': normal_response})
+        if _is_metadata_call(json):
+            return MockLLMResp({'choices': [{'message': {'content': metadata_content}}]})
+        return MockLLMResp({'choices': [{'message': {'content': normal_response}}]})
 
     return side_effect
 
@@ -70,11 +77,11 @@ def test_review_metadata_endpoint_uses_user_message_from_body(client):
     captured_queries = []
 
     def capture_side_effect(url, headers=None, json=None, timeout=None, stream=False):
-        prefix = (json or {}).get('PROMPT_TEXT_PREFIX', '')
-        if 'metadata assistant' in prefix:
-            captured_queries.append((json or {}).get('input_str', ''))
-            return MockLLMResp({'content': '{"name": "JS Help", "emoji": "\U0001f7e8", "theme": "JavaScript questions"}'})
-        return MockLLMResp({'content': 'reply'})
+        if _is_metadata_call(json):
+            user_content = next((m.get('content', '') for m in (json or {}).get('messages', []) if m.get('role') == 'user'), '')
+            captured_queries.append(user_content)
+            return MockLLMResp({'choices': [{'message': {'content': '{"name": "JS Help", "emoji": "\U0001f7e8", "theme": "JavaScript questions"}'}}]})
+        return MockLLMResp({'choices': [{'message': {'content': 'reply'}}]})
 
     with patch('requests.post', side_effect=capture_side_effect):
         client.post(
@@ -135,11 +142,10 @@ def test_search_stream_does_not_call_metadata_review(client):
 
     def track_calls(url, headers=None, json=None, timeout=None, stream=False):
         nonlocal metadata_call_count
-        prefix = (json or {}).get('PROMPT_TEXT_PREFIX', '')
-        if 'metadata assistant' in prefix:
+        if _is_metadata_call(json):
             metadata_call_count += 1
-            return MockLLMResp({'content': '{}'})
-        return MockLLMResp({'content': 'stream reply'})
+            return MockLLMResp({'choices': [{'message': {'content': '{}'}}]})
+        return MockLLMResp({'choices': [{'message': {'content': 'stream reply'}}]})
 
     with patch('requests.post', side_effect=track_calls):
         response = client.post(

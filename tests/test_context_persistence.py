@@ -33,18 +33,17 @@ def test_context_persistence(client, monkeypatch):
     app = client.application
 
     # Prepare mocked responses: first message reply, then follow-up reply
-    responses = [
-        {"content": "Okay, this chat is about apples. Let me know how I can help you explore the topic!"},
-        {"content": "This chat is about apples."},
+    response_contents = [
+        "Okay, this chat is about apples. Let me know how I can help you explore the topic!",
+        "This chat is about apples.",
     ]
 
     call_log = []
 
     def fake_post(url, headers=None, json=None, timeout=None):
         call_log.append(json)
-        if not responses:
-            return MockResponse({"content": ""})
-        return MockResponse(responses.pop(0))
+        content = response_contents.pop(0) if response_contents else ""
+        return MockResponse({"choices": [{"message": {"content": content}}]})
 
     monkeypatch.setattr('services.requests.post', fake_post)
 
@@ -77,7 +76,13 @@ def test_context_persistence(client, monkeypatch):
     body2 = rv2.get_json()
     assert body2['data']['attributes']['session_id'] == session_id
 
-    # The follow-up LLM call should include the previous assistant reply in its payload.
+    # The follow-up LLM call should include the previous assistant reply in its messages array.
     assert call_log, "No LLM calls were recorded"
-    assert any(p and 'input_str' in p and 'Okay, this chat is about apples.' in p['input_str'] for p in call_log), \
-        "Context (previous assistant reply) was not included in any LLM call payload"
+    assert any(
+        p and 'messages' in p and
+        any(
+            m.get('role') == 'assistant' and 'Okay, this chat is about apples.' in m.get('content', '')
+            for m in p['messages']
+        )
+        for p in call_log
+    ), "Context (previous assistant reply) was not included in any LLM call payload"

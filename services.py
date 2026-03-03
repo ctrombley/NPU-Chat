@@ -206,42 +206,43 @@ class LLMService:
                 'port': int(config['NPU_PORT']),
                 'timeout': config['CONNECTION_TIMEOUT'],
                 'serialize': True,
+                'model': config.get('NPU_MODEL', 'qwen3-4b'),
             }
         return {
             'address': entry.get('address', config['NPU_ADDRESS']),
             'port': int(entry.get('port', config['NPU_PORT'])),
             'timeout': int(entry.get('timeout', config['CONNECTION_TIMEOUT'])),
             'serialize': entry.get('serialize', True),
+            'model': entry.get('model', config.get('NPU_MODEL', 'qwen3-4b')),
         }
 
     @staticmethod
-    def _build_request(query: str, prefix: str, postfix: str) -> Dict[str, Any]:
-        return {
-            'PROMPT_TEXT_PREFIX': prefix,
-            'input_str': str(query) + ' ',
-            'PROMPT_TEXT_POSTFIX': postfix,
-        }
+    def _clean_prefix(prefix: str) -> str:
+        """Strip Qwen2.5 chat template tokens from Sign.prefix to yield plain system prompt text."""
+        text = re.sub(r'<\|im_start\|>system\s*', '', prefix)
+        text = re.sub(r'\s*<\|im_end\|>.*', '', text, flags=re.DOTALL)
+        return text.strip()
 
     @staticmethod
-    def feed_the_llama(query: str, prefix: str, postfix: str, role: str = 'chat') -> str:
+    def _build_request(messages: List[Dict[str, str]], model: str) -> Dict[str, Any]:
+        return {'model': model, 'messages': messages}
+
+    @staticmethod
+    def feed_the_llama(messages: List[Dict[str, str]], role: str = 'chat') -> str:
         mc = LLMService._get_model_config(role)
-        json_data = LLMService._build_request(query, prefix, postfix)
+        json_data = LLMService._build_request(messages, mc['model'])
+        url = f"http://{mc['address']}:{mc['port']}/v1/chat/completions"
         headers = {'Content-Type': 'application/json'}
         lock = LLMService._get_lock(mc['address'], mc['port']) if mc['serialize'] else None
 
         def _do_request():
             try:
-                resp = requests.post(
-                    f"http://{mc['address']}:{mc['port']}",
-                    headers=headers,
-                    json=json_data,
-                    timeout=mc['timeout'],
-                )
+                resp = requests.post(url, headers=headers, json=json_data, timeout=mc['timeout'])
                 resp.raise_for_status()
                 try:
                     resp_json: Dict[str, Any] = resp.json()
-                    answer = resp_json.get('content', resp.text)
-                except ValueError:
+                    answer = resp_json['choices'][0]['message']['content']
+                except (ValueError, KeyError, IndexError):
                     answer = resp.text
                 return answer
             except Timeout:
@@ -255,56 +256,41 @@ class LLMService:
         return _do_request()
 
     @staticmethod
-    def feed_the_llama_stream(query: str, prefix: str, postfix: str):
-        """Returns a generator that yields chunks of the LLM response for SSE streaming."""
+    def feed_the_llama_stream(messages: List[Dict[str, str]]):
+        """Returns a generator that yields text chunks from the LLM via OpenAI SSE streaming."""
         mc = LLMService._get_model_config('chat')
-        json_data = LLMService._build_request(query, prefix, postfix)
+        json_data = {**LLMService._build_request(messages, mc['model']), 'stream': True}
+        url = f"http://{mc['address']}:{mc['port']}/v1/chat/completions"
         lock = LLMService._get_lock(mc['address'], mc['port']) if mc['serialize'] else None
 
         def _stream():
-            headers = {'Content-Type': 'application/json'}
-
             def _do_stream():
                 try:
                     resp = requests.post(
-                        f"http://{mc['address']}:{mc['port']}",
-                        headers=headers,
+                        url,
+                        headers={'Content-Type': 'application/json'},
                         json=json_data,
                         timeout=mc['timeout'],
                         stream=True,
                     )
                     resp.raise_for_status()
 
-                    buffer = b""
-                    got_chunks = False
-                    for chunk in resp.iter_content(chunk_size=64):
-                        if chunk:
-                            got_chunks = True
-                            buffer += chunk
-                            try:
-                                partial = buffer.decode('utf-8')
-                                yield partial
-                                buffer = b""
-                            except UnicodeDecodeError:
-                                continue
-
-                    if got_chunks and buffer:
+                    for raw_line in resp.iter_lines():
+                        if not raw_line:
+                            continue
+                        line = raw_line.decode('utf-8') if isinstance(raw_line, bytes) else raw_line
+                        if not line.startswith('data: '):
+                            continue
+                        data_str = line[6:]
+                        if data_str == '[DONE]':
+                            return
                         try:
-                            yield buffer.decode('utf-8', errors='replace')
-                        except Exception:
-                            pass
-                        return
-
-                    if not got_chunks:
-                        full_text = resp.text
-                        try:
-                            resp_json = resp.json()
-                            full_text = resp_json.get('content', full_text)
-                        except (ValueError, KeyError):
-                            pass
-                        words = full_text.split(' ')
-                        for i, word in enumerate(words):
-                            yield word + (' ' if i < len(words) - 1 else '')
+                            event = json.loads(data_str)
+                            content = event['choices'][0].get('delta', {}).get('content', '')
+                            if content:
+                                yield content
+                        except (ValueError, KeyError, IndexError):
+                            continue
 
                 except Timeout:
                     yield "Request timed out. Please try again later."
@@ -365,10 +351,12 @@ Example: {{"name": "Python async debugging", "emoji": "🐍", "theme": "Debuggin
                 query += """
 Example: {"name": "Python async debugging", "emoji": "🐍", "theme": "Debugging async/await with SQLAlchemy."}"""
 
-            prefix = "<|im_start|>system You are a concise chat metadata assistant. <|im_end|> <|im_start|>user "
-            postfix = " <|im_end|><|im_start|>assistant "
+            meta_messages = [
+                {"role": "system", "content": "You are a concise chat metadata assistant. Return JSON only, no explanation, no markdown."},
+                {"role": "user", "content": query},
+            ]
 
-            response = LLMService.feed_the_llama(query, prefix, postfix, role='metadata')
+            response = LLMService.feed_the_llama(meta_messages, role='metadata')
             response = response.strip()
 
             json_match = re.search(r'\{.*\}', response, re.DOTALL)

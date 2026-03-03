@@ -10,13 +10,14 @@ class Config:
         self.BINDING_ADDRESS = os.environ.get('BINDING_ADDRESS', '0.0.0.0')
         self.BINDING_PORT = int(os.environ.get('BINDING_PORT', '1314'))
 
-        # NPU Server (legacy single-model config)
-        self.NPU_ADDRESS = os.environ.get('NPU_ADDRESS', '192.168.0.196')
-        self.NPU_PORT = os.environ.get('NPU_PORT', '31337')
-        self.CONNECTION_TIMEOUT = int(os.environ.get('CONNECTION_TIMEOUT', '45'))
+        # NPU Server — OpenAI-compatible proxy (port 8090)
+        self.NPU_ADDRESS = os.environ.get('NPU_ADDRESS', 'localhost')
+        self.NPU_PORT = os.environ.get('NPU_PORT', '8090')
+        self.NPU_MODEL = os.environ.get('NPU_MODEL', 'qwen3-4b')
+        self.CONNECTION_TIMEOUT = int(os.environ.get('CONNECTION_TIMEOUT', '120'))
 
-        # Model registry — JSON mapping role → {address, port, timeout, serialize}
-        # If not set, all roles use NPU_ADDRESS:NPU_PORT
+        # Model registry — JSON mapping role → {address, port, timeout, serialize, model}
+        # If not set, all roles use NPU_ADDRESS:NPU_PORT with NPU_MODEL
         raw_registry = os.environ.get('MODEL_REGISTRY', '')
         if raw_registry:
             self.MODEL_REGISTRY = json.loads(raw_registry)
@@ -27,6 +28,7 @@ class Config:
                     'port': int(self.NPU_PORT),
                     'timeout': self.CONNECTION_TIMEOUT,
                     'serialize': True,
+                    'model': self.NPU_MODEL,
                 }
             }
 
